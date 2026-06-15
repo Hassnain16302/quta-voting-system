@@ -1,0 +1,41 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.manifest
+*.spec
+
+# --- Virtual Environments ---
+venv/
+env/
+.venv/
+.env
+
+# --- Environment Variables (CRITICAL: Do not upload this) ---
+.env
+.flaskenv
+
+# --- VS Code / IDE Settings ---
+.vscode/
+.idea/
+*.swp
+
+# --- Database ---
+instance/
+*.sqlite3
+*.db
+migrations/
+
+# --- Node.js (If you run 'npm install') ---
+node_modules/
+npm-debug.log
+
+# --- System Files ---
+.DS_Store
+Thumbs.db
+
+# --- Blockchain / Solidity (Optional) ---
+# If your compile.py generates a 'build' folder, ignore it:
+build/
+# Only ignore ABI json if you want to re-generate it every time, 
+# otherwise keep it. (I recommend keeping VotingABI.json committed if it's stable).

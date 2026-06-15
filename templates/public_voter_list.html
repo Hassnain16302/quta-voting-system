@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Eligible Voters | QUTA Vote{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+    <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Eligible Voter List</h1>
+        <p class="text-slate-500 dark:text-slate-400">List of students approved to cast ballots.</p>
+    </div>
+    <div class="px-4 py-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl font-bold text-sm border border-blue-500/20">
+        Total: {{ voters|length }}
+    </div>
+</div>
+
+<div class="glass-panel overflow-hidden rounded-2xl">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-gray-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-gray-200 dark:border-white/10">
+                    <th class="p-4 w-16 text-center">#</th>
+                    <th class="p-4">Full Name</th>
+                    <th class="p-4">Email Address</th>
+                    <th class="p-4 text-center">Status</th>
+                </tr>
+            </thead>
+            <tbody class="text-sm divide-y divide-gray-200 dark:divide-white/5">
+                {% for voter in voters %}
+                <tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                    <td class="p-4 text-center text-slate-400 font-mono">{{ loop.index }}</td>
+                    <td class="p-4 font-bold text-gray-900 dark:text-white">{{ voter.full_name }}</td>
+                    <td class="p-4 text-slate-500 dark:text-slate-400">{{ voter.email }}</td>
+                    <td class="p-4 text-center">
+                        <span class="px-2 py-1 rounded text-[10px] font-bold uppercase bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+                            Eligible
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="p-12 text-center text-slate-500">No voters found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

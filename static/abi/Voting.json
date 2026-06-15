@@ -1,0 +1,145 @@
+[
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "indexed": true, "internalType": "uint256", "name": "candidateId", "type": "uint256" },
+      { "indexed": false, "internalType": "address", "name": "user", "type": "address" }
+    ],
+    "name": "CandidateAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "indexed": true, "internalType": "uint256", "name": "voterId", "type": "uint256" }
+    ],
+    "name": "UserDeactivatedById",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "indexed": true, "internalType": "uint256", "name": "voterId", "type": "uint256" }
+    ],
+    "name": "VoterAddedById",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "indexed": true, "internalType": "uint256", "name": "voterId", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256[]", "name": "candidateIds", "type": "uint256[]" },
+      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+    ],
+    "name": "VoteCastById",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "admin",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "internalType": "address", "name": "user", "type": "address" }
+    ],
+    "name": "addCandidate",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "internalType": "uint256", "name": "voterId", "type": "uint256" }
+    ],
+    "name": "addVoterById",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "internalType": "uint256", "name": "voterId", "type": "uint256" }
+    ],
+    "name": "deactivateVoterById",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "internalType": "uint256", "name": "voterId", "type": "uint256" },
+      { "internalType": "uint256[]", "name": "candidateIds", "type": "uint256[]" }
+    ],
+    "name": "voteBulkById",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "internalType": "uint256", "name": "candidateId", "type": "uint256" }
+    ],
+    "name": "getResults",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "electionId", "type": "uint256" }],
+    "name": "getCandidateCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "internalType": "uint256", "name": "candidateId", "type": "uint256" }
+    ],
+    "name": "getCandidate",
+    "outputs": [
+      { "internalType": "uint256", "name": "", "type": "uint256" },
+      { "internalType": "address", "name": "", "type": "address" },
+      { "internalType": "bool", "name": "", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "internalType": "uint256", "name": "voterId", "type": "uint256" }
+    ],
+    "name": "hasVotedByVoterId",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "electionId", "type": "uint256" },
+      { "internalType": "uint256", "name": "voterId", "type": "uint256" }
+    ],
+    "name": "isVoterIdEligible",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

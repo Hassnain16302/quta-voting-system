@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel | QUTA Vote{% endblock %}
+
+{% block content %}
+<header class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">Admin Control Center</h1>
+    <p class="text-slate-500 dark:text-slate-400">Manage elections, users, and system settings.</p>
+</header>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    
+    <div class="glass-panel p-6 rounded-2xl flex flex-col justify-between border-l-4 border-blue-500 relative overflow-hidden group">
+        <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                <i class="bi bi-file-earmark-text"></i>
+            </div>
+            <div>
+                <p class="text-xs font-bold uppercase text-slate-500 tracking-wider">Pending Forms</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ total_forms }}</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-white/10 mt-2">
+            <a href="{{ url_for('routes.upload_csv') }}" class="text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1">
+                <i class="bi bi-upload"></i> Upload CSV
+            </a>
+            <a href="{{ url_for('routes.show_forms') }}" class="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-md shadow-blue-500/20 transition-all">
+                Review <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+    </div>
+
+    <div class="glass-panel p-6 rounded-2xl flex flex-col justify-between border-l-4 border-purple-500 group">
+        <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                <i class="bi bi-people-fill"></i>
+            </div>
+            <div>
+                <p class="text-xs font-bold uppercase text-slate-500 tracking-wider">Total Voters</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ total_voters }}</p>
+            </div>
+        </div>
+        <div class="flex justify-end pt-4 border-t border-gray-200 dark:border-white/10 mt-2">
+            <a href="{{ url_for('routes.add_voter') }}" class="text-purple-600 dark:text-purple-400 hover:underline text-sm font-semibold flex items-center gap-1">
+                Manage List <i class="bi bi-chevron-right"></i>
+            </a>
+        </div>
+    </div>
+
+    <div class="glass-panel p-6 rounded-2xl flex flex-col justify-between border-l-4 border-orange-500 group">
+        <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                <i class="bi bi-person-badge"></i>
+            </div>
+            <div>
+                <p class="text-xs font-bold uppercase text-slate-500 tracking-wider">Candidates</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ total_candidates }}</p>
+            </div>
+        </div>
+        <div class="flex justify-end pt-4 border-t border-gray-200 dark:border-white/10 mt-2">
+            <a href="{{ url_for('routes.add_candidate') }}" class="text-orange-600 dark:text-orange-400 hover:underline text-sm font-semibold flex items-center gap-1">
+                Manage Candidates <i class="bi bi-chevron-right"></i>
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if election %}
+<div class="glass-panel p-8 rounded-2xl mb-8 relative overflow-hidden">
+    <div class="absolute top-0 right-0 p-32 bg-blue-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+
+    <div class="flex flex-col md:flex-row justify-between items-start gap-6 relative z-10">
+        <div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Current Election Status</h3>
+            <p class="text-2xl text-blue-600 dark:text-blue-400 font-bold mb-4">{{ election.title }}</p>
+            
+            <div class="flex flex-wrap gap-6 text-sm text-slate-500 dark:text-slate-400">
+                <div class="flex items-center gap-2">
+                    <i class="bi bi-calendar-event"></i> Start: <span class="text-slate-700 dark:text-slate-200 font-medium">{{ election.start_time|localtime }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i class="bi bi-flag"></i> End: <span class="text-slate-700 dark:text-slate-200 font-medium">{{ election.end_time|localtime }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto mt-4 md:mt-0">
+            {% if election_status.ongoing %}
+                <a href="{{ url_for('routes.live_voters') }}" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-center transition-all shadow-lg shadow-green-600/20 flex items-center justify-center gap-2">
+                    <span class="relative flex h-2 w-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                    </span>
+                    Live Tracker
+                </a>
+            
+            {% elif election_status.closed %}
+                <a href="{{ url_for('routes.view_statistics', election_id=election.id) }}" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-center transition-all shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2">
+                    <i class="bi bi-pie-chart-fill"></i> View Statistics
+                </a>
+            {% endif %}
+            
+            <a href="{{ url_for('routes.show_results') }}" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-center transition-all flex items-center justify-center gap-2">
+                <i class="bi bi-bar-chart"></i> View Results
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 pl-1 border-l-4 border-blue-500">&nbsp;Quick Actions</h3>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <a href="{{ url_for('routes.assign_election') }}" class="glass-panel p-6 rounded-2xl text-center hover:bg-gray-50 dark:hover:bg-white/10 transition-all group border hover:border-blue-500/30">
+        <div class="text-3xl text-blue-500 mb-3 group-hover:scale-110 transition-transform"><i class="bi bi-calendar-plus"></i></div>
+        <span class="text-sm font-semibold text-gray-700 dark:text-slate-300">Schedule Election</span>
+    </a>
+    <a href="{{ url_for('routes.manage_announcements') }}" class="glass-panel p-6 rounded-2xl text-center hover:bg-gray-50 dark:hover:bg-white/10 transition-all group border hover:border-yellow-500/30">
+        <div class="text-3xl text-yellow-500 mb-3 group-hover:scale-110 transition-transform"><i class="bi bi-megaphone"></i></div>
+        <span class="text-sm font-semibold text-gray-700 dark:text-slate-300">Announcements</span>
+    </a>
+    <a href="{{ url_for('routes.send_credentials') }}" class="glass-panel p-6 rounded-2xl text-center hover:bg-gray-50 dark:hover:bg-white/10 transition-all group border hover:border-green-500/30">
+        <div class="text-3xl text-green-500 mb-3 group-hover:scale-110 transition-transform"><i class="bi bi-envelope"></i></div>
+        <span class="text-sm font-semibold text-gray-700 dark:text-slate-300">Send Credentials</span>
+    </a>
+    <a href="{{ url_for('routes.elections_history') }}" class="glass-panel p-6 rounded-2xl text-center hover:bg-gray-50 dark:hover:bg-white/10 transition-all group border hover:border-slate-500/30">
+        <div class="text-3xl text-slate-500 mb-3 group-hover:scale-110 transition-transform"><i class="bi bi-clock-history"></i></div>
+        <span class="text-sm font-semibold text-gray-700 dark:text-slate-300">History</span>
+    </a>
+</div>
+{% endblock %}

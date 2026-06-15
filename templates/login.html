@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Login | QUTA Vote{% endblock %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center min-h-[60vh]">
+    <div class="glass-panel w-full max-w-md p-8 md:p-10 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+
+        <div class="text-center mb-8 relative z-10">
+            <div class="w-16 h-16 bg-blue-600/10 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl">
+                <i class="bi bi-shield-lock"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Welcome Back</h2>
+            <p class="text-slate-500 dark:text-slate-400 mt-2">Sign in to access the voting portal.</p>
+        </div>
+
+        <form method="POST" class="space-y-6 relative z-10" novalidate>
+            {{ form.hidden_tag() }}
+            
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Email Address</label>
+                {{ form.email(class="glass-input w-full px-4 py-3 outline-none", placeholder="user@university.edu.pk") }}
+                {% for error in form.email.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Password</label>
+                {{ form.password(class="glass-input w-full px-4 py-3 outline-none", placeholder="••••••••") }}
+                {% for error in form.password.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/30 transition-all hover:scale-[1.02]">
+                Sign In securely
+            </button>
+        </form>
+    </div>
+    
+    <p class="text-center mt-6 text-slate-500 dark:text-slate-400 text-sm">
+        Having trouble? <a href="#" class="text-blue-600 hover:underline">Contact Support</a>
+    </p>
+</div>
+{% endblock %}

@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Cast Vote | QUTA Vote{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <header class="mb-10 text-center">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-3">Cast Your Ballot</h1>
+        <p class="text-slate-500 dark:text-slate-400">Select one candidate for each position below.</p>
+        
+        <div id="connection-status" class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-sm font-medium border border-blue-500/20">
+            <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+            System Ready
+        </div>
+    </header>
+
+    {% if election and election.start_time <= now <= election.end_time %}
+    <form id="vote-form" class="space-y-12">
+        {{ form.hidden_tag() }}
+
+        {% for field in form %}
+            {% if field.type == "SelectField" %}
+            {% set designation = field.label.text %}
+            <div class="relative vote-section">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-6 pl-4 border-l-4 border-blue-500">
+                    {{ designation }}
+                </h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {% for choice_id, choice_label in field.choices %}
+                        <label class="cursor-pointer group relative">
+                            <input type="radio" name="{{ field.name }}" value="{{ choice_id }}" class="peer sr-only">
+                            
+                            <div class="glass-panel p-6 rounded-2xl h-full transition-all duration-200 
+                                        peer-checked:ring-2 peer-checked:ring-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 
+                                        hover:scale-[1.02] hover:bg-gray-50 dark:hover:bg-white/5">
+                                
+                                <div class="flex items-start justify-between mb-4">
+                                    <div class="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold shadow-sm transition-colors
+                                        {% if choice_id == 0 %} bg-slate-200 dark:bg-slate-700 text-slate-500
+                                        {% else %} bg-gradient-to-br from-blue-500 to-indigo-600 text-white {% endif %}">
+                                        {% if choice_id == 0 %}<i class="bi bi-x-lg"></i>{% else %}{{ choice_label[0] }}{% endif %}
+                                    </div>
+
+                                    <div class="w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600 
+                                                peer-checked:border-blue-500 peer-checked:bg-blue-500 transition-all flex items-center justify-center">
+                                        <i class="bi bi-check text-white opacity-0 peer-checked:opacity-100 font-bold"></i>
+                                    </div>
+                                </div>
+
+                                <h4 class="text-lg font-bold text-gray-900 dark:text-white">
+                                    {% if choice_id == 0 %}Abstain{% else %}{{ choice_label }}{% endif %}
+                                </h4>
+                                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                    {% if choice_id == 0 %}Do not vote for this role{% else %}{{ designation }}{% endif %}
+                                </p>
+                            </div>
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+
+        <div class="fixed bottom-0 left-0 right-0 p-4 glass-panel border-x-0 border-b-0 rounded-none md:relative md:bg-transparent md:border-0 md:p-0 z-40 mt-12 flex justify-end">
+            <button id="submitVote" type="submit" class="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-600/30 transition-all hover:scale-105 flex items-center justify-center gap-3 text-lg">
+                <i class="bi bi-send-fill"></i> Confirm & Submit Ballot
+            </button>
+        </div>
+    </form>
+    
+    <script>
+        document.getElementById("vote-form").addEventListener("submit", async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById("submitVote");
+            const originalBtnText = submitBtn.innerHTML;
+            
+            // 1. Collect Data from Radio Buttons
+            const formData = new FormData(this);
+            const votesMap = {};
+            let hasSelection = false;
+            let totalDesignations = document.querySelectorAll('.vote-section').length;
+            let selectedCount = 0;
+
+            for (const [key, value] of formData.entries()) {
+                if (key.startsWith("vote_for_")) {
+                    const designation = key.replace("vote_for_", "").replace(/_/g, " ");
+                    const cid = parseInt(value);
+                    
+                    if (!isNaN(cid)) {
+                        selectedCount++;
+                        if (cid > 0) {
+                            votesMap[designation] = cid;
+                            hasSelection = true;
+                        }
+                    }
+                }
+            }
+
+            // 2. Validation
+            if (selectedCount < totalDesignations) {
+                alert("⚠️ Please select an option (Candidate or Abstain) for every designation.");
+                return;
+            }
+
+            if (!hasSelection && selectedCount > 0) {
+                if(!confirm("⚠️ You have selected 'Abstain' for all positions. Are you sure you want to submit a blank ballot?")) {
+                    return;
+                }
+            }
+
+            // 3. Submit to Backend
+            try {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="animate-spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full mr-2"></span> Processing...';
+
+                const csrfToken = document.querySelector('input[name="csrf_token"]')?.value;
+                const headers = { "Content-Type": "application/json" };
+                if (csrfToken) headers["X-CSRFToken"] = csrfToken;
+
+                const res = await fetch("/api/record_vote", {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify({ votes: votesMap }),
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    // ✅ SUCCESS: Redirect immediately to Dashboard
+                    // You can optionally un-comment the alert below if you want a popup first.
+                    // alert("Vote submitted successfully!"); 
+                    window.location.href = "{{ url_for('routes.dashboard') }}";
+                } else {
+                    alert("❌ Error: " + (result.error || "Submission failed"));
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                }
+            } catch (error) {
+                console.error(error);
+                alert("❌ Network Error: " + error.message);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            }
+        });
+    </script>
+    
+    {% else %}
+    <div class="glass-panel p-10 text-center">
+        <h3 class="text-xl font-bold text-red-500">Voting Closed</h3>
+        <p class="text-slate-500 mt-2">There is no active election at this time.</p>
+        <a href="{{ url_for('routes.dashboard') }}" class="mt-4 inline-block px-6 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600">Return to Dashboard</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Upload CSV | Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Batch User Upload</h1>
+            <p class="text-slate-500 dark:text-slate-400">Import multiple voters at once using a CSV file.</p>
+        </div>
+        <a href="{{ url_for('routes.admin_panel') }}" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-white/10 text-sm font-bold transition-colors flex items-center gap-2">
+            <i class="bi bi-arrow-left"></i> Back
+        </a>
+    </div>
+
+    <div class="glass-panel p-8 rounded-3xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-24 bg-green-500/10 rounded-full blur-3xl -mr-12 -mt-12 pointer-events-none"></div>
+
+        <div class="relative z-10">
+            <div class="mb-8 p-5 rounded-2xl bg-blue-500/5 border border-blue-500/10">
+                <h3 class="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold mb-3">
+                    <i class="bi bi-info-circle-fill"></i> CSV Format Requirements
+                </h3>
+                <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">
+                    Your file <strong>must</strong> include a header row with these exact column names:
+                </p>
+                <div class="bg-slate-100 dark:bg-black/30 p-3 rounded-lg border border-slate-200 dark:border-white/5 font-mono text-sm text-slate-700 dark:text-slate-200 mb-4 select-all">
+                    name,email,phone,cnic
+                </div>
+                <ul class="text-xs text-slate-500 dark:text-slate-400 list-disc pl-5 space-y-1">
+                    <li><strong>CNIC:</strong> Exactly 13 digits (no dashes).</li>
+                    <li><strong>Phone:</strong> Must be a valid format.</li>
+                    <li><strong>Email:</strong> Must be unique in the system.</li>
+                </ul>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data" class="space-y-6">
+                {{ form.hidden_tag() }}
+                
+                <div>
+                    <label class="block text-xs font-bold uppercase text-slate-500 mb-2">Select File</label>
+                    <div class="relative">
+                        {{ form.csv_file(class="block w-full text-sm text-slate-500
+                            file:mr-4 file:py-3 file:px-6
+                            file:rounded-xl file:border-0
+                            file:text-sm file:font-bold
+                            file:bg-blue-600 file:text-white
+                            hover:file:bg-blue-700
+                            file:cursor-pointer cursor-pointer
+                            glass-input rounded-xl
+                        ") }}
+                    </div>
+                    {% for error in form.csv_file.errors %}
+                        <p class="text-red-500 text-xs mt-2 font-bold flex items-center gap-1">
+                            <i class="bi bi-exclamation-circle"></i> {{ error }}
+                        </p>
+                    {% endfor %}
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" class="w-full py-4 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold text-lg shadow-xl shadow-green-500/20 transition-all hover:scale-[1.02] flex items-center justify-center gap-2">
+                        <i class="bi bi-cloud-upload-fill"></i> Upload & Process
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

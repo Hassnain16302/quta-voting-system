@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}QUTA Vote{% endblock %}</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    animation: {
+                        'blob': 'blob 7s infinite',
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                            '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                            '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                            '100%': { transform: 'translate(0px, 0px) scale(1)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style type="text/tailwindcss">
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: rgba(148,163,184,0.3); border-radius: 9999px; }
+        
+        .bg-mesh-dark {
+            background-color: #0f172a;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%);
+            background-attachment: fixed;
+        }
+        .bg-mesh-light {
+            background-color: #f8fafc;
+            background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .glass-panel {
+            background-color: rgba(255,255,255,0.9);
+            backdrop-filter: blur(20px);
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            border-radius: 1rem;
+        }
+        .dark .glass-panel {
+            background-color: rgba(15,23,42,0.6);
+            border-color: rgba(255,255,255,0.1);
+            box-shadow: 0 10px 25px -5px rgba(2,6,23,0.6);
+        }
+        .glass-input {
+            background-color: #f8fafc;
+            border: 1px solid #d1d5db;
+            color: #0f172a;
+            border-radius: 0.75rem;
+            transition: all .15s ease-in-out;
+        }
+        .glass-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(59,130,246,0.15);
+            border-color: transparent;
+        }
+        .dark .glass-input {
+            background-color: rgba(15,23,42,0.5);
+            border-color: rgba(255,255,255,0.1);
+            color: #ffffff;
+        }
+    </style>
+</head>
+
+<body 
+    x-data="{ 
+        darkMode: localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches),
+        toggleTheme() {
+            this.darkMode = !this.darkMode;
+            localStorage.setItem('theme', this.darkMode ? 'dark' : 'light');
+            document.documentElement.classList.toggle('dark', this.darkMode);
+        },
+        sidebarOpen: false
+    }"
+    x-init="$watch('darkMode', val => document.documentElement.classList.toggle('dark', val)); document.documentElement.classList.toggle('dark', darkMode);"
+    :class="darkMode ? 'bg-mesh-dark text-slate-200' : 'bg-mesh-light text-slate-800'"
+    class="h-screen flex overflow-hidden font-sans transition-colors duration-300"
+>
+
+    <aside class="w-72 glass-panel border-y-0 border-l-0 rounded-none hidden md:flex flex-col h-full z-20 shrink-0">
+        <div class="h-20 flex items-center px-6 border-b border-gray-200 dark:border-white/10">
+            <div class="flex items-center gap-3">
+                <img src="{{ url_for('static', filename='images/university_logo.png') }}" 
+                     alt="Uni Logo" 
+                     class="w-10 h-10 object-contain rounded-full bg-white p-0.5 shadow-md">
+                <div>
+                    <span class="font-bold text-lg tracking-tight block leading-tight">QUTA Vote</span>
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">Secure Portal</span>
+                </div>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-4 py-6 space-y-1">
+            <a href="{{ url_for('routes.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-white/5 {{ 'bg-blue-50 dark:bg-white/10 text-blue-600 dark:text-blue-400 font-semibold' if request.endpoint == 'routes.index' else 'text-slate-500 dark:text-slate-400' }}">
+                <i class="bi bi-house-door-fill"></i> Home
+            </a>
+            
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('routes.dashboard') }}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-white/5 {{ 'bg-blue-50 dark:bg-white/10 text-blue-600 dark:text-blue-400 font-semibold' if request.endpoint == 'routes.dashboard' else 'text-slate-500 dark:text-slate-400' }}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                
+                {% if current_user.is_admin %}
+                <div class="pt-4 pb-2 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Admin Controls</div>
+                <a href="{{ url_for('routes.admin_panel') }}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-white/5 {{ 'bg-blue-50 dark:bg-white/10 text-blue-600 dark:text-blue-400 font-semibold' if request.endpoint == 'routes.admin_panel' else 'text-slate-500 dark:text-slate-400' }}">
+                    <i class="bi bi-sliders"></i> Admin Panel
+                </a>
+                {% else %}
+                <a href="{{ url_for('routes.vote') }}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-gray-100 dark:hover:bg-white/5 {{ 'bg-blue-50 dark:bg-white/10 text-blue-600 dark:text-blue-400 font-semibold' if request.endpoint == 'routes.vote' else 'text-slate-500 dark:text-slate-400' }}">
+                    <i class="bi bi-check-circle-fill"></i> Cast Vote
+                </a>
+                {% endif %}
+            {% endif %}
+        </nav>
+
+        <div class="p-4 border-t border-gray-200 dark:border-white/10 space-y-3">
+            <button @click="toggleTheme()" class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors text-sm font-medium">
+                <span x-text="darkMode ? 'Dark Mode' : 'Light Mode'"></span>
+                <i class="bi" :class="darkMode ? 'bi-moon-stars-fill text-yellow-400' : 'bi-sun-fill text-orange-500'"></i>
+            </button>
+            
+            {% if current_user.is_authenticated %}
+            <div class="flex items-center gap-3 px-1 pt-2">
+                <div class="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm font-bold border border-gray-300 dark:border-white/20">
+                    {{ current_user.full_name[0] }}
+                </div>
+                <div class="overflow-hidden">
+                    <p class="text-sm font-semibold truncate">{{ current_user.full_name }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ current_user.designation or 'Voter' }}</p>
+                </div>
+                <a href="{{ url_for('routes.logout') }}" class="ml-auto text-red-500 hover:text-red-600 p-2"><i class="bi bi-box-arrow-right text-lg"></i></a>
+            </div>
+            {% else %}
+            <a href="{{ url_for('routes.login') }}" class="flex justify-center w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-500/30 transition-all">
+                Login Portal
+            </a>
+            {% endif %}
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col relative overflow-hidden h-full">
+        <header class="md:hidden h-16 glass-panel rounded-none border-x-0 border-t-0 flex items-center justify-between px-4 sticky top-0 z-30 shrink-0">
+            <div class="flex items-center gap-2">
+                <img src="{{ url_for('static', filename='images/university_logo.png') }}" class="w-8 h-8 rounded-full bg-white p-0.5">
+                <span class="font-bold text-lg">QUTA Vote</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <button @click="toggleTheme()" class="p-2"><i class="bi" :class="darkMode ? 'bi-moon-stars-fill text-yellow-400' : 'bi-sun-fill text-orange-500'"></i></button>
+                <button @click="sidebarOpen = !sidebarOpen" class="text-2xl"><i class="bi bi-list"></i></button>
+            </div>
+        </header>
+
+        <div x-show="sidebarOpen" class="absolute inset-0 z-50 bg-black/50 md:hidden backdrop-blur-sm" @click="sidebarOpen = false"></div>
+        <div x-show="sidebarOpen" class="absolute inset-y-0 left-0 z-50 w-72 glass-panel rounded-none flex flex-col md:hidden transition-transform duration-300" 
+             x-transition:enter="translate-x-[-100%]" x-transition:enter-end="translate-x-0" x-transition:leave="translate-x-0" x-transition:leave-end="translate-x-[-100%]">
+             <div class="h-16 flex items-center px-6 border-b border-gray-200 dark:border-white/10 font-bold text-lg">Menu</div>
+             <nav class="p-4 space-y-2">
+                <a href="{{ url_for('routes.index') }}" class="block px-4 py-3 rounded-lg hover:bg-white/10">Home</a>
+                <a href="{{ url_for('routes.dashboard') }}" class="block px-4 py-3 rounded-lg hover:bg-white/10">Dashboard</a>
+                {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('routes.logout') }}" class="block px-4 py-3 rounded-lg text-red-400 hover:bg-white/10">Logout</a>
+                {% else %}
+                    <a href="{{ url_for('routes.login') }}" class="block px-4 py-3 rounded-lg text-blue-400 hover:bg-white/10">Login</a>
+                {% endif %}
+             </nav>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="max-w-6xl mx-auto mb-6 space-y-3">
+                {% for category, msg in messages %}
+                <div class="p-4 rounded-xl border flex items-center gap-3 shadow-sm backdrop-blur-md
+                    {% if category == 'success' %} bg-green-500/10 border-green-500/20 text-green-700 dark:text-green-400
+                    {% elif category == 'danger' %} bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400
+                    {% else %} bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-400 {% endif %}">
+                    <i class="bi {% if category == 'success' %}bi-check-circle-fill{% elif category == 'danger' %}bi-exclamation-octagon-fill{% else %}bi-info-circle-fill{% endif %}"></i>
+                    {{ msg }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            <div class="max-w-6xl mx-auto min-h-full">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

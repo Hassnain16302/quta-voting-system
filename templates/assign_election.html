@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Schedule Election | Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="glass-panel p-8 rounded-3xl border-t-4 border-blue-500">
+        <div class="mb-8 text-center">
+            <div class="w-16 h-16 bg-blue-500/10 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                <i class="bi bi-calendar-check"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Schedule New Election</h2>
+            <p class="text-slate-500 dark:text-slate-400 text-sm">Set the timeline and deploy the smart contract.</p>
+        </div>
+
+        {% if form.errors %}
+        <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+            <strong class="block mb-1"><i class="bi bi-exclamation-triangle"></i> Please fix errors:</strong>
+            <ul class="list-disc pl-5 space-y-1">
+                {% for field, errors in form.errors.items() %}
+                    {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <form method="POST" class="space-y-6">
+            {{ form.hidden_tag() }}
+            
+            <div>
+                <label class="block text-xs font-bold uppercase text-slate-500 mb-2">Election Title</label>
+                {{ form.title(class="glass-input w-full px-4 py-3", placeholder="e.g. Spring Semester 2025") }}
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-slate-500 mb-2">Start Date & Time</label>
+                    {{ form.start_datetime(class="glass-input w-full px-4 py-3") }}
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-slate-500 mb-2">End Date & Time</label>
+                    {{ form.end_datetime(class="glass-input w-full px-4 py-3") }}
+                </div>
+            </div>
+
+            <div class="pt-4">
+                <button type="submit" class="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-xl shadow-blue-600/20 transition-all hover:scale-[1.01]">
+                    🚀 Deploy Election Contract
+                </button>
+                <p class="text-center text-xs text-slate-500 mt-4">
+                    This action will register all candidates and eligible voters on the blockchain.
+                </p>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

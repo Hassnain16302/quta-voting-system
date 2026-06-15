@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Official Election Results</title>
+    <style>
+        @page {
+            margin: 1cm;
+            size: A4 portrait;
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            line-height: 1.6;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #1e3a8a; /* Navy Blue */
+            padding-bottom: 20px;
+        }
+        .logo {
+            width: 80px;
+            height: auto;
+            margin-bottom: 10px;
+        }
+        h1 {
+            font-size: 24px;
+            margin: 0;
+            color: #1e3a8a;
+            text-transform: uppercase;
+        }
+        h2 {
+            font-size: 16px;
+            margin: 5px 0 0 0;
+            font-weight: normal;
+            color: #666;
+        }
+        .meta {
+            text-align: right;
+            font-size: 10px;
+            color: #888;
+            margin-bottom: 20px;
+        }
+        
+        .designation-section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+        .designation-title {
+            background-color: #f3f4f6;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #111;
+            border-left: 5px solid #1e3a8a;
+            margin-bottom: 10px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th {
+            text-align: left;
+            border-bottom: 2px solid #ccc;
+            padding: 8px;
+            color: #555;
+            text-transform: uppercase;
+            font-size: 10px;
+        }
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        .rank-col { width: 50px; text-align: center; font-weight: bold; color: #888; }
+        .votes-col { width: 100px; text-align: right; font-weight: bold; }
+        
+        .winner-row {
+            background-color: #f0fdf4; /* Light Green */
+        }
+        .winner-badge {
+            display: inline-block;
+            background: #16a34a;
+            color: white;
+            font-size: 8px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 10px;
+            text-transform: uppercase;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 30px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            font-size: 9px;
+            color: #aaa;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        {% if logo_url %}
+        <img src="{{ logo_url }}" alt="Logo" class="logo" />
+        {% endif %}
+        <h1>Official Election Results</h1>
+        <h2>{{ election.title }}</h2>
+    </div>
+
+    <div class="meta">
+        Report Generated: {{ now.strftime('%Y-%m-%d %H:%M:%S UTC') }} <br>
+        Election ID: #{{ election.id }}
+    </div>
+
+    {% if results %}
+        {% for designation, rows in results.items() %}
+        <div class="designation-section">
+            <div class="designation-title">{{ designation }}</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th class="rank-col">Rank</th>
+                        <th>Candidate Name</th>
+                        <th class="votes-col">Total Votes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr class="{% if loop.first and row[2] > 0 %}winner-row{% endif %}">
+                        <td class="rank-col">{{ loop.index }}</td>
+                        <td>
+                            {{ row[1] }}
+                            {% if loop.first and row[2] > 0 %}
+                            <span class="winner-badge">Winner</span>
+                            {% endif %}
+                        </td>
+                        <td class="votes-col">{{ row[2] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="text-align: center; color: #666; margin-top: 50px;">
+            No results data available for this election.
+        </p>
+    {% endif %}
+
+    <div class="footer">
+        Generated securely via QUTA Vote Blockchain System. This document is an official record.
+    </div>
+</body>
+</html>

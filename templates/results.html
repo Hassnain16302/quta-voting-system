@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Results | Admin{% endblock %}
+
+{% block content %}
+<div class="text-center mb-10">
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2">Election Results</h1>
+    {% if election %}
+    <p class="text-lg text-blue-500 font-semibold">{{ election.title }}</p>
+    {% endif %}
+</div>
+
+<div class="max-w-4xl mx-auto">
+    {# STATE 1: RESULTS AVAILABLE (Closed & Archived) #}
+    {% if results %}
+        {% for desig, leaderboard_list in results.items() %}
+        <div class="glass-panel p-8 rounded-3xl mb-6 relative overflow-hidden">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-6 border-l-4 border-blue-500 pl-4">{{ desig }}</h3>
+            
+            <div class="space-y-3">
+                {% for name, count in leaderboard_list %}
+                <div class="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/5 relative overflow-hidden group">
+                    {% if loop.first and count > 0 %}
+                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-yellow-400"></div>
+                    {% endif %}
+
+                    <div class="flex items-center gap-4">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
+                            {% if loop.first and count > 0 %} bg-yellow-400 text-yellow-900 shadow-yellow-500/50 shadow-sm
+                            {% else %} bg-slate-200 dark:bg-white/10 text-slate-500 {% endif %}">
+                            {{ loop.index }}
+                        </div>
+                        <span class="font-bold text-gray-800 dark:text-white text-lg">{{ name }}</span>
+                    </div>
+                    
+                    <span class="px-4 py-1.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-sm border border-blue-500/20">
+                        {{ count }} Votes
+                    </span>
+                </div>
+                {% else %}
+                <p class="text-slate-500 italic">No votes cast.</p>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+    {# STATE 2: ELECTION ENDED BUT NOT ARCHIVED #}
+    {% elif election_ended %}
+        <div class="glass-panel p-10 text-center border-l-4 border-yellow-500">
+            <div class="w-16 h-16 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                <i class="bi bi-archive"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white">Election Concluded</h3>
+            <p class="text-slate-500 dark:text-slate-400 mt-2 mb-6 max-w-md mx-auto">
+                Voting has ended. Please archive the results from the blockchain to generate the final report.
+            </p>
+            <form action="{{ url_for('routes.archive_statistics', election_id=election.id) }}" method="POST">
+                <button type="submit" class="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all hover:scale-105">
+                    <i class="bi bi-box-seam mr-2"></i> Archive & Publish Results
+                </button>
+            </form>
+        </div>
+
+    {# STATE 3: ACTIVE #}
+    {% elif election_active %}
+        <div class="glass-panel p-12 text-center border-l-4 border-green-500">
+            <div class="w-20 h-20 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl animate-pulse">
+                <i class="bi bi-activity"></i>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Voting in Progress</h3>
+            <p class="text-slate-500 dark:text-slate-400 mt-2 mb-6">
+                Results will be available here after the election closes at <strong>{{ election.end_time|localtime }}</strong>.
+            </p>
+            <a href="{{ url_for('routes.live_voters') }}" class="inline-flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-all">
+                <i class="bi bi-broadcast"></i> Monitor Live Turnout
+            </a>
+        </div>
+
+    {# STATE 4: NOT STARTED #}
+    {% else %}
+        <div class="glass-panel p-10 text-center">
+             <div class="w-16 h-16 bg-slate-100 dark:bg-white/5 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                <i class="bi bi-hourglass"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white">Results Unavailable</h3>
+            <p class="text-slate-500 dark:text-slate-400 mt-2">
+                {% if election %}
+                Election starts at {{ election.start_time|localtime }}.
+                {% else %}
+                No election scheduled.
+                {% endif %}
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

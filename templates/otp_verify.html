@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Verify OTP | QUTA Vote{% endblock %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center min-h-[60vh]">
+    <div class="glass-panel w-full max-w-md p-8 md:p-10 text-center relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-500"></div>
+
+        <div class="w-20 h-20 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl animate-bounce-slow">
+            <i class="bi bi-shield-check"></i>
+        </div>
+
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Two-Factor Verification</h2>
+        <p class="text-slate-500 dark:text-slate-400 mb-8 text-sm">
+            We have sent a 6-digit code to your registered Email. Enter it below to continue.
+        </p>
+
+        <form method="POST" action="{{ url_for('routes.verify_otp') }}">
+            {{ form.hidden_tag() }}
+            
+            <div class="mb-6">
+                {{ form.otp(class="glass-input w-full text-center text-2xl font-mono tracking-[0.5em] py-4 rounded-xl", placeholder="000000", maxlength="6", autocomplete="off") }}
+                {% for error in form.otp.errors %}
+                    <p class="text-red-500 text-xs mt-2 font-semibold">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold shadow-lg shadow-blue-500/30 transition-all hover:scale-[1.02]">
+                Verify Identity
+            </button>
+        </form>
+    </div>
+    <div class="mt-6 text-center">
+        <a href="{{ url_for('routes.login') }}" class="text-sm text-slate-500 hover:text-slate-300">
+            &larr; Back to Login
+        </a>
+    </div>
+</div>
+{% endblock %}
