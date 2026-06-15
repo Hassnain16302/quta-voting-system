@@ -1,31 +1,28 @@
 import json
 import os
 from web3 import Web3
-from solcx import compile_source, install_solc
 from flask import current_app
 from pathlib import Path
+from web3.middleware import geth_poa_middleware 
 
-# Install a specific Solidity compiler version if not already
-install_solc("0.8.0")
+# ✅ Completely removed solcx imports and install_solc()
 
 def compile_contract():
     """
-    - Reads contracts/Voting.sol
-    - Compiles it using solcx
-    - Returns the compiled interface (abi + bytecode)
+    - Bypasses live compilation to avoid Render firewall blocks.
+    - Reads the pre-compiled ABI and Bytecode from JSON.
     """
-    contract_path = Path(__file__).parent.parent / "contracts" / "Voting.sol"
-    with open(contract_path, "r") as file:
-        source = file.read()
+    file_path = Path(__file__).parent / "compiled_contract.json"
+    
+    if not file_path.exists():
+        raise FileNotFoundError("compiled_contract.json is missing! Run contracts/compile.py locally first.")
+        
+    with open(file_path, "r") as f:
+        data = json.load(f)
+        
+    return data["abi"], data["bytecode"]
 
-    compiled = compile_source(
-        source,
-        output_values=["abi", "bin"],
-        solc_version="0.8.0"
-    )
-    # Key format: "<stdin>:Voting"
-    contract_id, contract_interface = compiled.popitem()
-    return contract_interface["abi"], contract_interface["bin"]
+# ... Keep your existing deploy_contract(), load_contract_instance(), etc. exactly as they are below this point ...
 
 
 

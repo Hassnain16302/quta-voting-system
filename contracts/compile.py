@@ -2,6 +2,7 @@ from solcx import compile_standard, install_solc
 import json
 from pathlib import Path
 
+# This only runs on your local machine, so the download will work!
 install_solc("0.8.0")
 
 def main():
@@ -15,7 +16,7 @@ def main():
             "settings": {
                 "outputSelection": {
                     "*": {
-                        "*": ["abi", "metadata", "evm.bytecode", "evm.sourceMap"]
+                        "*": ["abi", "evm.bytecode.object"]
                     }
                 }
             },
@@ -23,13 +24,15 @@ def main():
         solc_version="0.8.0",
     )
 
-    # Write ABI to a file for manual inspection (optional)
     abi = compiled["contracts"]["Voting.sol"]["Voting"]["abi"]
     bytecode = compiled["contracts"]["Voting.sol"]["Voting"]["evm"]["bytecode"]["object"]
 
-    (Path(__file__).parent / "VotingABI.json").write_text(json.dumps(abi))
-    (Path(__file__).parent / "VotingBytecode.bin").write_text(bytecode)
-    print("ABI and Bytecode generated in contracts/ directory.")
+    # Save the compiled data directly into the app folder
+    output_path = Path(__file__).parent.parent / "app" / "compiled_contract.json"
+    with open(output_path, "w") as f:
+        json.dump({"abi": abi, "bytecode": bytecode}, f)
+        
+    print(f"✅ Contract compiled successfully! Saved to {output_path}")
 
 if __name__ == "__main__":
     main()
