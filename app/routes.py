@@ -339,6 +339,10 @@ def vote():
     if not (election.start_time <= now <= election.end_time):
         flash("Election is not currently active.", "warning")
         return redirect(url_for("routes.dashboard"))
+    
+    if current_user.is_admin: # (Or current_user.role == 'admin')
+        flash("Administrators are not permitted to cast votes.", "danger")
+        return redirect(url_for('dashboard'))
 
     has_voted = Vote.query.filter_by(
         voter_id=current_user.id, election_id=election.id

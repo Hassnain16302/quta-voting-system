@@ -48,7 +48,11 @@
             </div>
 
             {% if not election_ended %}
-                {% if not has_voted %}
+                {% if current_user.is_admin %}
+                    <div class="inline-flex items-center gap-3 px-6 py-3 bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 rounded-xl font-bold">
+                        <i class="bi bi-shield-lock-fill text-xl"></i> Admin Observation Mode (Voting Disabled)
+                    </div>
+                {% elif not has_voted %}
                     <a href="{{ url_for('routes.vote') }}" class="inline-flex items-center gap-2 px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-600/20 transition-all hover:-translate-y-1">
                         Enter Voting Booth <i class="bi bi-arrow-right"></i>
                     </a>
