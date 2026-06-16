@@ -8,67 +8,40 @@ from app.models import (
 )
 from app.blockchain import load_contract_instance, get_all_votes
 
+import os
+from web3 import Web3
+from app.models import db, Candidate, Election, ElectionStatisticsArchive
+
 
 def archive_statistics_from_blockchain(election_id):
-    """
-    Archives the election results from blockchain into ElectionStatisticsArchive.
-    Cleans old archive data for the same election_id to avoid duplication.
-    """
-    print(f"📦 Archiving results for election ID {election_id}...")
-
-    # Clean archive if it exists for this election
-    ElectionStatisticsArchive.query.filter_by(election_id=election_id).delete()
-    db.session.flush()
-
     election = Election.query.get(election_id)
     if not election:
-        print("❌ Election not found.")
-        return
+        raise ValueError("Election not found.")
 
-    # Load contract
-    try:
-        w3, contract = load_contract_instance(election.contract_address)
-    except Exception as e:
-        print(f"❌ Failed to load contract: {e}")
-        # Propagate error to show a flash message to the admin
-        raise Exception("Failed to connect to the blockchain contract.") from e
+    # 1. Connect to the blockchain
+    rpc_url = os.getenv("WEB3_PROVIDER_URI", "https://ethereum-sepolia-rpc.publicnode.com")
+    w3 = Web3(Web3.HTTPProvider(rpc_url))
+    contract = load_contract_instance(w3, election.contract_address)
 
-    # Get candidates and vote counts
-    candidates = Candidate.query.filter_by(election_id=election_id).all()
+    # 2. Fetch candidates in the EXACT order they were added to the blockchain
+    candidates = Candidate.query.filter_by(election_id=election_id).order_by(Candidate.id.asc()).all()
 
-
-    try:
-        # ✅ FIXED: Pass the election_id to the function call
-        vote_counts = get_all_votes(contract, w3, election_id, candidates)
-    except Exception as e:
-        print(f"❌ Failed to get votes from blockchain: {e}")
-        # Propagate a more specific error to the user
-        raise Exception("Failed to retrieve vote counts from the blockchain.") from e
-
-    total_votes = sum(vote_counts.values())
-    total_voters = User.query.filter(
-        User.is_eligible_voter == True,
-        User.email != "admin@university.com"
-    ).count()
-
-    for c in candidates:
-        user = User.query.get(c.user_id)
-        if not user:
-            continue  # skip orphaned candidate
-        archive = ElectionStatisticsArchive(
-            election_id=election_id,
-            candidate_name=user.full_name,
-            candidate_email=user.email,
+    # 3. Query the blockchain using the array index (0, 1, 2...)
+    for index, c in enumerate(candidates):
+        
+        # THE FIX: Use 'index' instead of 'c.id'
+        blockchain_vote_count = contract.functions.getVotes(index).call()
+        
+        archive_entry = ElectionStatisticsArchive(
+            election_id=election.id,
+            candidate_name=c.user.full_name,
             designation=c.designation,
-            vote_count=vote_counts.get(c.id, 0),
-            title=election.title,
-            votes_cast=total_votes,
-            total_voters=total_voters
+            vote_count=blockchain_vote_count
         )
-        db.session.add(archive)
-
+        db.session.add(archive_entry)
+        
     db.session.commit()
-    print(f"✅ Archived results for election {election_id}")
+
 
 def get_live_results(election):
     """
