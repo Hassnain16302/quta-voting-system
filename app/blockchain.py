@@ -81,28 +81,38 @@ def deploy_contract():
         current_app.logger.error(f"Deployment failed: {str(e)}")
         raise
 
-def load_contract_instance(address=None):
+from web3.middleware import geth_poa_middleware
+from web3 import Web3
+from flask import current_app
+
+def load_contract_instance(w3, address=None):
     """
-    - Given an address (string), or uses the one in Config
-    - Returns a Web3.py contract instance (abi + address)
+    - Uses the provided Web3 instance (w3) and an address.
+    - Injects PoA middleware (Crucial for Sepolia).
+    - Returns ONLY the Web3.py contract instance.
     """
-    ganache_url = current_app.config.get("GANACHE_URL")
-    w3 = Web3(Web3.HTTPProvider(ganache_url))
+    # ✅ 1. Inject PoA middleware for Sepolia compatibility
+    try:
+        w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+    except ValueError:
+        # If it's already injected, safely ignore the error
+        pass 
     
-    # ✅ Inject PoA middleware here as well
-    w3.middleware_onion.inject(geth_poa_middleware, layer=0)
-    
-    if not w3.is_connected():
-        raise ConnectionError("Cannot connect to blockchain at " + ganache_url)
-        
+    # ✅ 2. Resolve the contract address
     if not address:
         address = current_app.config.get("CONTRACT_ADDRESS")
     if not address:
-        raise ValueError("No contract address provided in Config or argument")
+        raise ValueError("No contract address provided in Config or argument.")
         
+    # ✅ 3. Ensure the address is formatted securely (Checksum)
+    checksum_address = Web3.to_checksum_address(address)
+    
+    # ✅ 4. Load the compiled ABI
     abi, _ = compile_contract()  
-    contract = w3.eth.contract(address=address, abi=abi)
-    return w3, contract
+    
+    # ✅ 5. Create and return ONLY the contract instance
+    contract = w3.eth.contract(address=checksum_address, abi=abi)
+    return contract
 
 def cast_vote(contract, w3, candidate_id, voter_address):
     """
