@@ -13,6 +13,7 @@ from web3 import Web3
 from app.models import db, Candidate, Election, ElectionStatisticsArchive
 
 
+
 def archive_statistics_from_blockchain(election_id):
     election = Election.query.get(election_id)
     if not election:
@@ -23,27 +24,40 @@ def archive_statistics_from_blockchain(election_id):
     w3 = Web3(Web3.HTTPProvider(rpc_url))
     contract = load_contract_instance(w3, election.contract_address)
 
-    # 2. Fetch candidates
+    # 2. Calculate total eligible voters at the exact moment of archiving
+    total_voters = User.query.filter(
+        User.is_eligible_voter == True, 
+        User.email != "admin@university.com"
+    ).count()
+
+    # 3. Fetch candidates in correct order
     candidates = Candidate.query.filter_by(election_id=election_id).order_by(Candidate.id.asc()).all()
 
-    # 3. Query the blockchain using the correct Solidity function
+    # 4. Query the blockchain and save a complete snapshot
     for c in candidates:
         
         # Fallback just in case contract_cid is missing
         cid = c.contract_cid if c.contract_cid is not None else candidates.index(c)
         
-        # THE FIX: Call getResults() with both the election ID and the candidate's CID
+        # Call getResults() with both the election ID and the candidate's CID
         blockchain_vote_count = contract.functions.getResults(election.id, cid).call()
         
+        # THE FIX: Explicitly map ALL columns required by the database schema
         archive_entry = ElectionStatisticsArchive(
             election_id=election.id,
+            title=election.title if election.title else f"Election {election.id}",
             candidate_name=c.user.full_name,
+            candidate_email=c.user.email,
             designation=c.designation,
-            vote_count=blockchain_vote_count
+            vote_count=blockchain_vote_count,
+            votes_cast=blockchain_vote_count, 
+            total_voters=total_voters
         )
         db.session.add(archive_entry)
         
     db.session.commit()
+
+
 
 def get_live_results(election):
     """
