@@ -8,6 +8,7 @@ from flask_mail import Message
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import URLSafeTimedSerializer
 from pytz import timezone
+import requests
 
 
 @login_manager.user_loader
@@ -68,35 +69,53 @@ class User(db.Model, UserMixin):
 
 
     def send_credentials_email(self):
-        if not self.credentials_password:
-            plain_password = os.urandom(6).hex()
-            self.set_password(plain_password)
-            self.credentials_password = plain_password
-        else:
-             plain_password = self.credentials_password
-        
-        msg = Message(
-            subject="Your Voting Portal Credentials",
-            sender=os.getenv("MAIL_DEFAULT_SENDER"),
-            recipients=[self.email],)
-        msg.body = (
-            f"Hello {self.full_name},\n\n"
-            f"You have been approved as an eligible voter in the Faculty Elections.\n\n"
-            
-            f"Here are your login credentials:\n"
-            f"👉 Email: {self.email}\n"
-            f"👉 Password: {plain_password}\n\n"
+     if not self.credentials_password:
+         plain_password = os.urandom(6).hex()
+         self.set_password(plain_password)
+         self.credentials_password = plain_password
+     else:
+         plain_password = self.credentials_password
 
-            )
+     api_key = os.getenv("BREVO_API_KEY")
+     sender_email = os.getenv("MAIL_USERNAME")
 
-        try:
-            mail.send(msg)
-            self.credentials_sent = True
-            db.session.commit()
-        except Exception as e:
-            print(f"Email sending failed: {e}")
-            raise e
+     url = "https://api.brevo.com/v3/smtp/email"
+     headers = {
+         "accept": "application/json",
+         "api-key": api_key,
+         "content-type": "application/json"
+     }
 
+     payload = {
+         "sender": {"name": "Quta Voting Admin", "email": sender_email},
+         "to": [{"email": self.email}],
+         "subject": "Your Voting System Credentials",
+         "htmlContent": f"""
+         <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
+             <h2 style="color: #0f172a;">Welcome to Quta Voting System</h2>
+             <p style="color: #475569;">An administrator has registered you to participate in upcoming elections.</p>
+             <div style="background: #f1f5f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                 <p style="margin: 5px 0;"><strong>Email:</strong> {self.email}</p>
+                 <p style="margin: 5px 0;"><strong>Password:</strong> <span style="color: #ef4444; font-weight: bold;">{plain_password}</span></p>
+             </div>
+             <p style="color: #64748b; font-size: 12px;">Please log in securely to cast your vote when an election begins.</p>
+         </div>
+         """
+     }
+
+     try:
+         response = requests.post(url, json=payload, headers=headers)
+         response.raise_for_status()
+
+         self.credentials_sent = True
+         db.session.commit()
+         print(f"✅ Credentials sent successfully to {self.email} via Brevo API")
+
+     except Exception as e:
+         print(f"Brevo API Error (Credentials): {e}")
+         if hasattr(e, 'response') and e.response is not None:
+              print(f"Brevo Error Details: {e.response.text}")
+         raise e
 
         
 
