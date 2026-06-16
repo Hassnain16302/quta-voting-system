@@ -1006,29 +1006,15 @@ def clear_live_results(election_id):
         return redirect(url_for("routes.show_results"))
 
 
-
-
-
-
-
-
-
-
-
-
-
 @bp.route("/api/record_vote", methods=["POST"])
 @login_required
 def api_record_vote():
     from app.models import Candidate
     from app.blockchain import load_contract_instance, cast_vote_as_admin
-    from web3 import Web3 # Ensure Web3 is imported here
-    import os
-    
     try:
         payload = request.get_json()
-        votes = payload.get("votes", {})   # map: designation -> candidate_db_id
-        
+        votes = payload.get("votes", {})   
+
         election = Election.query.order_by(Election.start_time.desc()).first()
         if not election:
             return {"error": "No active election."}, 400
@@ -1038,51 +1024,44 @@ def api_record_vote():
         if already_voted:
             return {"error": "You have already voted."}, 400
 
-        # Map to contract candidate ids
         contract_ids = []
         db_candidate_ids_voted_for = [] 
 
         for designation, candidate_id in votes.items(): 
             candidate = Candidate.query.get(candidate_id)
 
-            # Check if candidate exists and has a contract_cid assigned
             if not candidate or candidate.contract_cid is None:
-                db.session.rollback() 
-                return {"error": f"Invalid candidate selection or candidate DB ID {candidate_id} is not registered on the current contract."}, 400
+                return {"error": f"Invalid candidate selection."}, 400
 
-            # Use candidate.contract_cid for blockchain transaction
             contract_ids.append(candidate.contract_cid)
             db_candidate_ids_voted_for.append(candidate.id) 
 
-        # Create local Vote records AFTER verifying all candidates are valid
+        # 1. Connect to blockchain
+        w3, contract = load_contract_instance(election.contract_address)
+        
+        # 2. Submit on-chain FIRST
+        receipt_or_txn = cast_vote_as_admin(contract, w3, election.id, current_user.id, contract_ids)
+
+        # 3. ✅ CRITICAL FIX: Verify the blockchain actually accepted the transaction
+        if hasattr(receipt_or_txn, 'status'):
+            if receipt_or_txn.status != 1:
+                return {"error": "Blockchain rejected the vote. Ensure you were an approved voter before this election started."}, 400
+
+        # 4. Create local Vote records ONLY AFTER blockchain success
         for db_cid in db_candidate_ids_voted_for:
             new_vote = Vote(voter_id=current_user.id, candidate_id=db_cid, election_id=election.id)
             db.session.add(new_vote)
 
         db.session.commit()
 
-        # --- THE FIX: Initialize w3 FIRST, then load the contract properly ---
-        rpc_url = os.getenv("WEB3_PROVIDER_URI", "https://ethereum-sepolia-rpc.publicnode.com")
-        w3 = Web3(Web3.HTTPProvider(rpc_url))
-        
-        # Pass w3 AND the address, and expect only 'contract' to be returned
-        contract = load_contract_instance(w3, election.contract_address)
-        # -------------------------------------------------------------------
-
-        # Submit on-chain using admin account
-        receipt_or_txn = cast_vote_as_admin(contract, w3, election.id, current_user.id, contract_ids)
-
         if isinstance(receipt_or_txn, dict) or hasattr(receipt_or_txn, 'transactionHash'):
-            # Receipt returned
             return {"status": "ok", "receipt": str(receipt_or_txn)}, 200
         else:
-            # unsigned txn returned
             return {"txn": receipt_or_txn}, 200
 
     except Exception as e:
         db.session.rollback()
         return {"error": f"Server error: {str(e)}"}, 500
-
 
 
 

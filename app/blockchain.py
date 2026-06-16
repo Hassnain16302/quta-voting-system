@@ -81,38 +81,12 @@ def deploy_contract():
         current_app.logger.error(f"Deployment failed: {str(e)}")
         raise
 
-from web3.middleware import geth_poa_middleware
-from web3 import Web3
-from flask import current_app
-
-def load_contract_instance(w3, address=None):
-    """
-    - Uses the provided Web3 instance (w3) and an address.
-    - Injects PoA middleware (Crucial for Sepolia).
-    - Returns ONLY the Web3.py contract instance.
-    """
-    # ✅ 1. Inject PoA middleware for Sepolia compatibility
-    try:
-        w3.middleware_onion.inject(geth_poa_middleware, layer=0)
-    except ValueError:
-        # If it's already injected, safely ignore the error
-        pass 
+def load_contract_instance(w3, address):
     
-    # ✅ 2. Resolve the contract address
-    if not address:
-        address = current_app.config.get("CONTRACT_ADDRESS")
-    if not address:
-        raise ValueError("No contract address provided in Config or argument.")
         
-    # ✅ 3. Ensure the address is formatted securely (Checksum)
-    checksum_address = Web3.to_checksum_address(address)
-    
-    # ✅ 4. Load the compiled ABI
     abi, _ = compile_contract()  
-    
-    # ✅ 5. Create and return ONLY the contract instance
-    contract = w3.eth.contract(address=checksum_address, abi=abi)
-    return contract
+    contract = w3.eth.contract(address=address, abi=abi)
+    return w3, contract
 
 def cast_vote(contract, w3, candidate_id, voter_address):
     """
@@ -200,13 +174,19 @@ def cast_vote_as_admin(contract, w3, election_id, voter_id, candidate_ids):
     """
     Admin account will submit votes on behalf of voter_id.
     """
-    admin_addr = w3.eth.accounts[0] if not os.getenv("ADMIN_ACCOUNT") else os.getenv("ADMIN_ACCOUNT")
+    admin_env = os.getenv("ADMIN_ACCOUNT")
+    if not admin_env:
+        raise ValueError("ADMIN_ACCOUNT is missing from environment variables.")
+        
+    # ✅ Checksum the address to prevent silent Web3 failures
+    admin_addr = Web3.to_checksum_address(admin_env) 
+    
     # Build transaction using admin account as 'from'
     txn = contract.functions.voteBulkById(election_id, voter_id, candidate_ids).build_transaction({
         "chainId": w3.eth.chain_id,
-        "gas": 400000,
+        "gas": 500000, # Safely boosted gas limit
         "from": admin_addr,
-        "nonce": w3.eth.get_transaction_count(admin_addr),
+        "nonce": w3.eth.get_transaction_count(admin_addr, 'pending'), # ✅ Use 'pending' to prevent collision
     })
 
     # If server has ADMIN_PRIVATE_KEY, sign and send
@@ -214,6 +194,4 @@ def cast_vote_as_admin(contract, w3, election_id, voter_id, candidate_ids):
         receipt = send_signed_transaction(w3, txn)
         return receipt
 
-    # Otherwise return unsigned txn (so an admin UI / metamask can sign it)
     return txn
-
