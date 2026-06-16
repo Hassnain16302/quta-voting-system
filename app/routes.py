@@ -549,24 +549,24 @@ def add_candidate():
 @bp.route("/admin/add_voter", methods=["GET", "POST"])
 @login_required
 def add_voter():
-    if not current_user.is_admin: # Use current_user instead of session for consistency
+    if not current_user.is_admin: 
         return redirect(url_for("routes.login"))
 
     # 1. Initialize Forms
     assign_form = AssignDesignationForm()
     form = AddVoterForm()
 
-    # ---------------------------------------------------------
-    # ✅ CRITICAL FIX: Populate choices BEFORE validation runs
-    # ---------------------------------------------------------
-    # Fetch users who are NOT yet eligible voters
     users = User.query.filter(User.is_eligible_voter == False, User.email != "admin@university.com").all()
     form.user_id.choices = [(u.id, f"{u.full_name} ({u.email})") for u in users]
 
-    # If AssignDesignationForm also needs dynamic choices, set them here too.
-    # For example: assign_form.designation.choices = [...] 
-    # (Only needed if you removed static choices from forms.py)
-    # ---------------------------------------------------------
+    # --- NEW STRICT CHECK: Block modification if election is active ---
+    latest_election = Election.query.order_by(Election.id.desc()).first()
+    if latest_election:
+        now = datetime.utcnow()
+        if latest_election.start_time <= now < latest_election.end_time:
+            if request.method == "POST":
+                flash("❌ Cannot add or modify voters while an election is actively in progress.", "danger")
+                return redirect(url_for("routes.add_voter"))
 
     # 2. Handle 'Assign Designation' Form (Update Roles)
     if 'submit_assign' in request.form:
@@ -1734,13 +1734,14 @@ def bulk_approve_pending():
         flash("No users selected.", "warning")
         return redirect(url_for("routes.show_forms"))
 
-    # Determine if election active (to block new candidates)
+    # --- UPDATED CHECK: Block ALL bulk actions during active election ---
     latest_election = Election.query.order_by(Election.id.desc()).first()
-    election_active = False
     if latest_election:
         now = datetime.utcnow()
         if latest_election.start_time <= now < latest_election.end_time:
-            election_active = True
+            flash("❌ Cannot bulk approve or reject users while an election is actively in progress.", "danger")
+            return redirect(url_for("routes.show_forms"))
+    # --------------------------------------------------------------------
 
     count = 0
     users = User.query.filter(User.id.in_(user_ids)).all()
@@ -1749,11 +1750,6 @@ def bulk_approve_pending():
         if user.email == "admin@university.com": continue
         
         if action == "approve":
-            # Optional: Block candidate approval during election
-            if election_active and user.designation != 'Voter':
-                flash(f"Skipped {user.full_name}: Cannot approve candidates during active election.", "warning")
-                continue
-                
             user.is_eligible_voter = True
             
             # Logic to add to Candidate table if needed
@@ -1771,7 +1767,6 @@ def bulk_approve_pending():
     db.session.commit()
     flash(f"Successfully {action}ed {count} user(s).", "success")
     return redirect(url_for("routes.show_forms"))
-
 
 
 import random
