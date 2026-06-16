@@ -1022,10 +1022,13 @@ def clear_live_results(election_id):
 def api_record_vote():
     from app.models import Candidate
     from app.blockchain import load_contract_instance, cast_vote_as_admin
+    from web3 import Web3 # Ensure Web3 is imported here
+    import os
+    
     try:
         payload = request.get_json()
         votes = payload.get("votes", {})   # map: designation -> candidate_db_id
-        # voter_address no longer required; we use current_user.id as voter_id
+        
         election = Election.query.order_by(Election.start_time.desc()).first()
         if not election:
             return {"error": "No active election."}, 400
@@ -1037,19 +1040,19 @@ def api_record_vote():
 
         # Map to contract candidate ids
         contract_ids = []
-        db_candidate_ids_voted_for = [] # Store DB IDs for local Vote record
+        db_candidate_ids_voted_for = [] 
 
-        for designation, candidate_id in votes.items(): # candidate_id is the DB ID from the form
+        for designation, candidate_id in votes.items(): 
             candidate = Candidate.query.get(candidate_id)
 
-            # ✅ Check if candidate exists and has a contract_cid assigned
+            # Check if candidate exists and has a contract_cid assigned
             if not candidate or candidate.contract_cid is None:
-                db.session.rollback() # Important: undo any previous Vote additions
+                db.session.rollback() 
                 return {"error": f"Invalid candidate selection or candidate DB ID {candidate_id} is not registered on the current contract."}, 400
 
-            # ✅ Use candidate.contract_cid for blockchain transaction
+            # Use candidate.contract_cid for blockchain transaction
             contract_ids.append(candidate.contract_cid)
-            db_candidate_ids_voted_for.append(candidate.id) # Keep DB ID for local record
+            db_candidate_ids_voted_for.append(candidate.id) 
 
         # Create local Vote records AFTER verifying all candidates are valid
         for db_cid in db_candidate_ids_voted_for:
@@ -1058,23 +1061,27 @@ def api_record_vote():
 
         db.session.commit()
 
+        # --- THE FIX: Initialize w3 FIRST, then load the contract properly ---
+        rpc_url = os.getenv("WEB3_PROVIDER_URI", "https://ethereum-sepolia-rpc.publicnode.com")
+        w3 = Web3(Web3.HTTPProvider(rpc_url))
+        
+        # Pass w3 AND the address, and expect only 'contract' to be returned
+        contract = load_contract_instance(w3, election.contract_address)
+        # -------------------------------------------------------------------
+
         # Submit on-chain using admin account
-        w3, contract = load_contract_instance(election.contract_address)
-        # Use helper that signs with ADMIN_PRIVATE_KEY if present
         receipt_or_txn = cast_vote_as_admin(contract, w3, election.id, current_user.id, contract_ids)
 
-        # If server signed and sent, receipt_or_txn is receipt; otherwise it's unsigned txn
         if isinstance(receipt_or_txn, dict) or hasattr(receipt_or_txn, 'transactionHash'):
             # Receipt returned
             return {"status": "ok", "receipt": str(receipt_or_txn)}, 200
         else:
-            # unsigned txn returned to be signed by admin
+            # unsigned txn returned
             return {"txn": receipt_or_txn}, 200
 
     except Exception as e:
         db.session.rollback()
         return {"error": f"Server error: {str(e)}"}, 500
-
 
 
 
