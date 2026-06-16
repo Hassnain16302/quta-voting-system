@@ -656,6 +656,10 @@ from web3 import Web3
 import os
 from datetime import datetime
 
+from app.blockchain import deploy_contract, load_contract_instance
+from web3 import Web3
+import os
+
 @bp.route("/admin/assign_election", methods=["GET", "POST"])
 @login_required
 def assign_election():
@@ -667,10 +671,9 @@ def assign_election():
     if form.validate_on_submit():
         new_election = None
         try:
-            # Step 1: Deploy contract
+            # Step 1: Deploy contract (We STILL wait for this receipt because we need the address)
             contract_address, abi = deploy_contract()
 
-            # Step 2: Create and save the new election to get its ID
             from pytz import timezone, utc
             pkt = timezone("Asia/Karachi")
             start_pkt = pkt.localize(form.start_datetime.data)
@@ -685,7 +688,7 @@ def assign_election():
             db.session.add(new_election)
             db.session.commit()
 
-            # Step 3: Connect to blockchain for registrations
+            # Step 3: Connect to blockchain
             rpc_url = os.getenv("WEB3_PROVIDER_URI", "https://ethereum-sepolia-rpc.publicnode.com")
             w3 = Web3(Web3.HTTPProvider(rpc_url))
             contract = load_contract_instance(w3, contract_address)
@@ -698,10 +701,10 @@ def assign_election():
                 raise Exception("ADMIN_PRIVATE_KEY is not set.")
 
             # --- REGISTER CANDIDATES ---
+            from app.utils.helpers import patch_candidates_to_latest_election
             patch_candidates_to_latest_election(new_election.id)
             candidates_to_register = Candidate.query.filter_by(election_id=new_election.id).order_by(Candidate.id.asc()).all()
             
-            # Fetch the starting nonce directly from the network
             current_nonce = w3.eth.get_transaction_count(admin_addr, 'pending')
             
             for index, candidate in enumerate(candidates_to_register):
@@ -710,11 +713,13 @@ def assign_election():
                     'chainId': w3.eth.chain_id, 'gas': 200000, 'gasPrice': w3.eth.gas_price,
                     'from': admin_addr, 'nonce': current_nonce
                 })
-                receipt = send_signed_transaction(w3, txn)
                 
-                # ✅ CRITICAL RESTORATION: Save the array index to the database!
+                # THE FIX: Sign and send instantly to mempool. DO NOT wait for receipt!
+                signed_txn = w3.eth.account.sign_transaction(txn, private_key=admin_private_key)
+                w3.eth.send_raw_transaction(signed_txn.raw_transaction)
+                
                 candidate.contract_cid = index
-                current_nonce += 1  # Increment nonce manually
+                current_nonce += 1 
             
             db.session.flush()
 
@@ -729,13 +734,17 @@ def assign_election():
                     'chainId': w3.eth.chain_id, 'gas': 100000, 'gasPrice': w3.eth.gas_price,
                     'from': admin_addr, 'nonce': current_nonce
                 })
-                receipt_voter = send_signed_transaction(w3, txn_voter)
-                current_nonce += 1  # Increment nonce manually
+                
+                # THE FIX: Sign and send instantly
+                signed_txn = w3.eth.account.sign_transaction(txn_voter, private_key=admin_private_key)
+                w3.eth.send_raw_transaction(signed_txn.raw_transaction)
+                
+                current_nonce += 1 
                 
             db.session.commit()
 
             current_app.config["CONTRACT_ADDRESS"] = contract_address
-            flash(f"✅ Election scheduled! {len(candidates_to_register)} candidates and {len(eligible_voters)} voters registered on blockchain.", "success")
+            flash(f"✅ Election scheduled! Transactions sent to blockchain. {len(candidates_to_register)} candidates and {len(eligible_voters)} voters are being registered in the background.", "success")
             return redirect(url_for("routes.admin_panel"))
 
         except Exception as e:
@@ -749,6 +758,7 @@ def assign_election():
             return redirect(url_for("routes.assign_election"))
 
     return render_template("assign_election.html", form=form)
+
 
 @bp.route("/admin/send_credentials", methods=["GET", "POST"])
 @login_required
