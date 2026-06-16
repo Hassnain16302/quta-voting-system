@@ -81,12 +81,32 @@ def deploy_contract():
         current_app.logger.error(f"Deployment failed: {str(e)}")
         raise
 
-def load_contract_instance(w3, address):
+def load_contract_instance(w3, address=None):
+    """
+    - Uses the provided Web3 instance (w3) and an address.
+    - Injects PoA middleware (Crucial for Sepolia).
+    - Returns ONLY the Web3.py contract instance.
+    """
+    from web3.middleware import geth_poa_middleware
+    from flask import current_app
     
+    try:
+        w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+    except ValueError:
+        pass 
+    
+    if not address:
+        address = current_app.config.get("CONTRACT_ADDRESS")
+    if not address:
+        raise ValueError("No contract address provided in Config or argument.")
         
+    checksum_address = Web3.to_checksum_address(address)
     abi, _ = compile_contract()  
-    contract = w3.eth.contract(address=address, abi=abi)
-    return w3, contract
+    
+    contract = w3.eth.contract(address=checksum_address, abi=abi)
+    
+    # THE FIX: Return ONLY the contract, preventing the 'tuple' crash
+    return contract
 
 def cast_vote(contract, w3, candidate_id, voter_address):
     """
