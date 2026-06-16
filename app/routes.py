@@ -1011,6 +1011,9 @@ def clear_live_results(election_id):
 def api_record_vote():
     from app.models import Candidate
     from app.blockchain import load_contract_instance, cast_vote_as_admin
+    from web3 import Web3
+    import os
+    
     try:
         payload = request.get_json()
         votes = payload.get("votes", {})   
@@ -1031,23 +1034,29 @@ def api_record_vote():
             candidate = Candidate.query.get(candidate_id)
 
             if not candidate or candidate.contract_cid is None:
-                return {"error": f"Invalid candidate selection."}, 400
+                db.session.rollback() 
+                return {"error": "Invalid candidate selection."}, 400
 
             contract_ids.append(candidate.contract_cid)
             db_candidate_ids_voted_for.append(candidate.id) 
 
-        # 1. Connect to blockchain
-        w3, contract = load_contract_instance(election.contract_address)
+        # --- THE FIX: Initialize Web3 FIRST ---
+        rpc_url = os.getenv("WEB3_PROVIDER_URI", "https://ethereum-sepolia-rpc.publicnode.com")
+        w3 = Web3(Web3.HTTPProvider(rpc_url))
         
-        # 2. Submit on-chain FIRST
+        # Load the contract instance correctly (passing both w3 and the address)
+        contract = load_contract_instance(w3, election.contract_address)
+        # --------------------------------------
+
+        # Submit on-chain using admin account
         receipt_or_txn = cast_vote_as_admin(contract, w3, election.id, current_user.id, contract_ids)
 
-        # 3. ✅ CRITICAL FIX: Verify the blockchain actually accepted the transaction
+        # Verify the blockchain actually accepted the transaction
         if hasattr(receipt_or_txn, 'status'):
             if receipt_or_txn.status != 1:
                 return {"error": "Blockchain rejected the vote. Ensure you were an approved voter before this election started."}, 400
 
-        # 4. Create local Vote records ONLY AFTER blockchain success
+        # Create local Vote records ONLY AFTER blockchain success
         for db_cid in db_candidate_ids_voted_for:
             new_vote = Vote(voter_id=current_user.id, candidate_id=db_cid, election_id=election.id)
             db.session.add(new_vote)
@@ -1062,8 +1071,6 @@ def api_record_vote():
     except Exception as e:
         db.session.rollback()
         return {"error": f"Server error: {str(e)}"}, 500
-
-
 
 
 
