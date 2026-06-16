@@ -651,6 +651,11 @@ from web3 import Web3
 
 # ... (rest of imports) ...
 
+from app.blockchain import deploy_contract, load_contract_instance, send_signed_transaction
+from web3 import Web3
+import os
+from datetime import datetime
+
 @bp.route("/admin/assign_election", methods=["GET", "POST"])
 @login_required
 def assign_election():
@@ -658,124 +663,92 @@ def assign_election():
         return redirect(url_for("routes.login"))
 
     form = AssignElectionForm()
-    last_election = Election.query.order_by(Election.id.desc()).first()
 
     if form.validate_on_submit():
         new_election = None
         try:
-            # Step 1 & 2: Deploy contract, Convert time (existing code)
+            # Step 1: Deploy contract
             contract_address, abi = deploy_contract()
-            # ... (time conversion code) ...
 
-            # Step 3: Create and save the new election to get its ID
+            # Step 2: Create and save the new election to get its ID
             from pytz import timezone, utc
             pkt = timezone("Asia/Karachi")
             start_pkt = pkt.localize(form.start_datetime.data)
             end_pkt = pkt.localize(form.end_datetime.data)
-            start_utc = start_pkt.astimezone(utc)
-            end_utc = end_pkt.astimezone(utc)
             new_election = Election(
                 title=form.title.data,
-                start_time=start_utc,
-                end_time=end_utc,
+                start_time=start_pkt.astimezone(utc),
+                end_time=end_pkt.astimezone(utc),
                 is_active=False,
                 contract_address=contract_address,
             )
             db.session.add(new_election)
             db.session.commit()
 
-            # --- Step 4: Register Candidates and Voters on the Blockchain ---
-            try:
-                w3, contract = load_contract_instance(contract_address)
+            # Step 3: Connect to blockchain for registrations
+            rpc_url = os.getenv("WEB3_PROVIDER_URI", "https://ethereum-sepolia-rpc.publicnode.com")
+            w3 = Web3(Web3.HTTPProvider(rpc_url))
+            contract = load_contract_instance(w3, contract_address)
+            
+            admin_env = os.getenv("ADMIN_ACCOUNT")
+            admin_addr = Web3.to_checksum_address(admin_env) if admin_env else Web3.to_checksum_address(w3.eth.accounts[0])
+            admin_private_key = os.getenv("ADMIN_PRIVATE_KEY")
+
+            if not admin_private_key:
+                raise Exception("ADMIN_PRIVATE_KEY is not set.")
+
+            # --- REGISTER CANDIDATES ---
+            patch_candidates_to_latest_election(new_election.id)
+            candidates_to_register = Candidate.query.filter_by(election_id=new_election.id).order_by(Candidate.id.asc()).all()
+            
+            # Fetch the starting nonce directly from the network
+            current_nonce = w3.eth.get_transaction_count(admin_addr, 'pending')
+            
+            for index, candidate in enumerate(candidates_to_register):
+                placeholder_address = "0x0000000000000000000000000000000000000000"
+                txn = contract.functions.addCandidate(new_election.id, placeholder_address).build_transaction({
+                    'chainId': w3.eth.chain_id, 'gas': 200000, 'gasPrice': w3.eth.gas_price,
+                    'from': admin_addr, 'nonce': current_nonce
+                })
+                receipt = send_signed_transaction(w3, txn)
                 
-                # ✅ SECURE: Fetch admin address safely without evaluating w3.eth.accounts[0] immediately
-                admin_env = os.getenv("ADMIN_ACCOUNT")
-                admin_addr = Web3.to_checksum_address(admin_env) if admin_env else Web3.to_checksum_address(w3.eth.accounts[0])
+                # ✅ CRITICAL RESTORATION: Save the array index to the database!
+                candidate.contract_cid = index
+                current_nonce += 1  # Increment nonce manually
+            
+            db.session.flush()
+
+            # --- REGISTER VOTERS ---
+            eligible_voters = User.query.filter(
+                User.is_eligible_voter == True,
+                User.email != "admin@university.com"
+            ).all()
+
+            for voter in eligible_voters:
+                txn_voter = contract.functions.addVoterById(new_election.id, voter.id).build_transaction({
+                    'chainId': w3.eth.chain_id, 'gas': 100000, 'gasPrice': w3.eth.gas_price,
+                    'from': admin_addr, 'nonce': current_nonce
+                })
+                receipt_voter = send_signed_transaction(w3, txn_voter)
+                current_nonce += 1  # Increment nonce manually
                 
-                admin_private_key = os.getenv("ADMIN_PRIVATE_KEY")
+            db.session.commit()
 
-                
-                if not admin_private_key:
-                    raise Exception("ADMIN_PRIVATE_KEY is not set.")
-
-                # --- Register Candidates (Existing Code) ---
-                patch_candidates_to_latest_election(new_election.id)
-                candidates_to_register = Candidate.query.filter_by(election_id=new_election.id).order_by(Candidate.id).all()
-                current_nonce = w3.eth.get_transaction_count(admin_addr)
-                
-                print(f"Starting candidate registration with nonce {current_nonce}")
-                for index, candidate in enumerate(candidates_to_register):
-                    placeholder_address = "0x0000000000000000000000000000000000000000"
-                    txn = contract.functions.addCandidate(new_election.id, placeholder_address).build_transaction({
-                        'chainId': w3.eth.chain_id, 'gas': 200000, 'gasPrice': w3.eth.gas_price,
-                        'from': admin_addr, 'nonce': current_nonce + index
-                    })
-                    receipt = send_signed_transaction(w3, txn)
-                    candidate.contract_cid = index
-                    print(f"Registered Candidate DB ID {candidate.id} with Contract CID {index} using nonce {current_nonce + index}")
-                
-                db.session.flush() # Flush candidate updates before proceeding
-
-                # --- ✅ START: Register Eligible Voters ---
-                eligible_voters = User.query.filter(
-                    User.is_eligible_voter == True,
-                    User.email != "admin@university.com" # Exclude admin
-                ).all()
-                
-                # Continue nonce incrementing from where candidate registration left off
-                voter_start_nonce = current_nonce + len(candidates_to_register)
-                print(f"Starting voter registration with nonce {voter_start_nonce}")
-
-                for index, voter in enumerate(eligible_voters):
-                    voter_id_on_chain = voter.id # Use the user's database ID as the voterId
-                    
-                    # Build transaction to call addVoterById
-                    txn_voter = contract.functions.addVoterById(new_election.id, voter_id_on_chain).build_transaction({
-                        'chainId': w3.eth.chain_id, 'gas': 100000, 'gasPrice': w3.eth.gas_price,
-                        'from': admin_addr, 'nonce': voter_start_nonce + index # Increment nonce
-                    })
-                    
-                    # Sign and send
-                    receipt_voter = send_signed_transaction(w3, txn_voter)
-                    print(f"Registered Voter DB ID {voter.id} on contract using nonce {voter_start_nonce + index}")
-                    
-                # --- ✅ END: Register Eligible Voters ---
-
-                db.session.commit() # Commit candidate contract_cids and potentially other changes
-
-            except Exception as contract_err:
-                # Rollback and delete the election if blockchain registration fails
-                db.session.rollback()
-                # Use the 'new_election' object captured earlier
-                if new_election:
-                   election_to_delete = db.session.get(Election, new_election.id) # Use db.session.get for safety
-                   if election_to_delete:
-                       db.session.delete(election_to_delete)
-                       db.session.commit()
-                flash(f"❌ Blockchain error: Failed to register candidates/voters. Election rolled back. Details: {str(contract_err)}", "danger")
-                current_app.logger.error(f"Candidate/Voter registration failed, election rolled back: {str(contract_err)}")
-                return redirect(url_for("routes.assign_election"))
-            # --- End Candidate/Voter Registration Block ---
-
-            # Step 5: Save contract address in config
             current_app.config["CONTRACT_ADDRESS"] = contract_address
-
-            flash(f"✅ Election scheduled! Contract deployed. {len(candidates_to_register)} candidates and {len(eligible_voters)} voters registered on blockchain.", "success")
+            flash(f"✅ Election scheduled! {len(candidates_to_register)} candidates and {len(eligible_voters)} voters registered on blockchain.", "success")
             return redirect(url_for("routes.admin_panel"))
 
         except Exception as e:
-            # Catch general errors
             db.session.rollback()
-            if new_election and db.session.object_session(new_election):
+            if new_election:
                  election_to_delete = db.session.get(Election, new_election.id)
                  if election_to_delete:
-                    db.session.delete(election_to_delete)
-                    db.session.commit()
-            flash(f"❌ An unexpected error occurred during election setup: {str(e)}", "danger")
-            current_app.logger.error(f"General election assignment failed: {str(e)}")
+                     db.session.delete(election_to_delete)
+                     db.session.commit()
+            flash(f"❌ Blockchain error: {str(e)}", "danger")
+            return redirect(url_for("routes.assign_election"))
 
     return render_template("assign_election.html", form=form)
-
 
 @bp.route("/admin/send_credentials", methods=["GET", "POST"])
 @login_required
