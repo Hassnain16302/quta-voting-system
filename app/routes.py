@@ -1462,9 +1462,15 @@ def upload_csv():
                     error_count += 1
                     continue
                 
-                existing_user = User.query.filter((User.email == email) | (User.cnic == cnic)).first()
+                # --- NEW: Added User.phone to the duplicate check ---
+                existing_user = User.query.filter(
+                    (User.email == email) | 
+                    (User.cnic == cnic) | 
+                    (User.phone == phone)
+                ).first()
+                
                 if existing_user:
-                    errors.append(f"Row {row_num}: User with email '{email}' or CNIC '{cnic}' already exists.")
+                    errors.append(f"Row {row_num}: User with this email, CNIC, or phone ('{phone}') already exists.")
                     error_count += 1
                     continue
 
