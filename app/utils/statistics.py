@@ -23,14 +23,17 @@ def archive_statistics_from_blockchain(election_id):
     w3 = Web3(Web3.HTTPProvider(rpc_url))
     contract = load_contract_instance(w3, election.contract_address)
 
-    # 2. Fetch candidates in the EXACT order they were added to the blockchain
+    # 2. Fetch candidates
     candidates = Candidate.query.filter_by(election_id=election_id).order_by(Candidate.id.asc()).all()
 
-    # 3. Query the blockchain using the array index (0, 1, 2...)
-    for index, c in enumerate(candidates):
+    # 3. Query the blockchain using the correct Solidity function
+    for c in candidates:
         
-        # THE FIX: Use 'index' instead of 'c.id'
-        blockchain_vote_count = contract.functions.getVotes(index).call()
+        # Fallback just in case contract_cid is missing
+        cid = c.contract_cid if c.contract_cid is not None else candidates.index(c)
+        
+        # THE FIX: Call getResults() with both the election ID and the candidate's CID
+        blockchain_vote_count = contract.functions.getResults(election.id, cid).call()
         
         archive_entry = ElectionStatisticsArchive(
             election_id=election.id,
@@ -41,7 +44,6 @@ def archive_statistics_from_blockchain(election_id):
         db.session.add(archive_entry)
         
     db.session.commit()
-
 
 def get_live_results(election):
     """
