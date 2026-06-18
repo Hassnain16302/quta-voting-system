@@ -34,20 +34,22 @@ def deploy_contract():
     - Injects PoA middleware for Sepolia compatibility
     - Signs and Deploys the compiled Voting.sol contract
     """
+    from web3.middleware import geth_poa_middleware
+    
     try:
         rpc_url = current_app.config.get("GANACHE_URL")
         w3 = Web3(Web3.HTTPProvider(rpc_url))
         
         # ✅ Inject PoA middleware for Sepolia testnet compatibility
         w3.middleware_onion.inject(geth_poa_middleware, layer=0)
-
+        
         if not w3.is_connected():
             current_app.logger.critical("Blockchain connection failed")
             raise ConnectionError("Could not connect to blockchain at " + rpc_url)
 
         abi, bytecode = compile_contract()
         
-        # ✅ Use Admin account from environment variables instead of local node accounts
+        # ✅ Use Admin account from environment variables
         admin_account = Web3.to_checksum_address(os.getenv("ADMIN_ACCOUNT"))
         admin_private_key = os.getenv("ADMIN_PRIVATE_KEY")
         
@@ -56,12 +58,17 @@ def deploy_contract():
 
         Voting = w3.eth.contract(abi=abi, bytecode=bytecode)
         
+        # 🚀 THE FIX: Calculate a competitive gas price (15% bump) and use 'pending' nonce
+        base_gas_price = w3.eth.gas_price
+        competitive_gas_price = int(base_gas_price * 1.15)
+        pending_nonce = w3.eth.get_transaction_count(admin_account, 'pending')
+
         # ✅ Build the deployment transaction
         construct_txn = Voting.constructor().build_transaction({
             'from': admin_account,
-            'nonce': w3.eth.get_transaction_count(admin_account),
-            'gas': 3000000, # Estimated gas for contract deployment
-            'gasPrice': w3.eth.gas_price,
+            'nonce': pending_nonce,               # 👈 Switched to pending nonce to avoid mempool collisions
+            'gas': 3000000, 
+            'gasPrice': competitive_gas_price,    # 👈 Boosted gas by 15% to prevent underpricing
             'chainId': w3.eth.chain_id
         })
         
@@ -72,6 +79,8 @@ def deploy_contract():
         tx_hash = w3.eth.send_raw_transaction(signed_txn.raw_transaction)
         
         current_app.logger.info("Deploying contract... waiting for receipt.")
+        
+        # We must wait for the receipt here because we need the deployed contract address for the DB
         tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
         
         current_app.logger.info(f"Contract deployed at {tx_receipt.contractAddress}")
@@ -80,6 +89,8 @@ def deploy_contract():
     except Exception as e:
         current_app.logger.error(f"Deployment failed: {str(e)}")
         raise
+
+
 
 def load_contract_instance(w3, address=None):
     """
@@ -155,8 +166,7 @@ def get_all_votes(contract, w3, election_id, candidates_list): # Pass Candidate 
 import os
 from web3 import Web3
 
-# In voting_system/app/blockchain.py
-# In voting_system/app/blockchain.py
+
 
 def send_signed_transaction(w3, raw_txn):
     admin_private_key = os.getenv("ADMIN_PRIVATE_KEY")
