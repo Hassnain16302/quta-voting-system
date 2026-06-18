@@ -1032,7 +1032,6 @@ def api_record_vote():
         if not election:
             return {"error": "No active election."}, 400
 
-        # Prevent double voting (DB-level check)
         already_voted = Vote.query.filter_by(voter_id=current_user.id, election_id=election.id).first()
         if already_voted:
             return {"error": "You have already voted."}, 400
@@ -1042,46 +1041,39 @@ def api_record_vote():
 
         for designation, candidate_id in votes.items(): 
             candidate = Candidate.query.get(candidate_id)
-
             if not candidate or candidate.contract_cid is None:
                 db.session.rollback() 
                 return {"error": "Invalid candidate selection."}, 400
-
             contract_ids.append(candidate.contract_cid)
             db_candidate_ids_voted_for.append(candidate.id) 
 
-        # --- THE FIX: Initialize Web3 FIRST ---
         rpc_url = os.getenv("WEB3_PROVIDER_URI", "https://ethereum-sepolia-rpc.publicnode.com")
         w3 = Web3(Web3.HTTPProvider(rpc_url))
-        
-        # Load the contract instance correctly (passing both w3 and the address)
         contract = load_contract_instance(w3, election.contract_address)
-        # --------------------------------------
 
         # Submit on-chain using admin account
         receipt_or_txn = cast_vote_as_admin(contract, w3, election.id, current_user.id, contract_ids)
 
-        # Verify the blockchain actually accepted the transaction
+        # ✅ Check status ONLY if a receipt was forcibly returned
         if hasattr(receipt_or_txn, 'status'):
             if receipt_or_txn.status != 1:
-                return {"error": "Blockchain rejected the vote. Ensure you were an approved voter before this election started."}, 400
+                return {"error": "Blockchain rejected the vote."}, 400
 
-        # Create local Vote records ONLY AFTER blockchain success
+        # ✅ THE FIX: Create local Vote records instantly for a fast UI response
         for db_cid in db_candidate_ids_voted_for:
             new_vote = Vote(voter_id=current_user.id, candidate_id=db_cid, election_id=election.id)
             db.session.add(new_vote)
 
         db.session.commit()
 
-        if isinstance(receipt_or_txn, dict) or hasattr(receipt_or_txn, 'transactionHash'):
-            return {"status": "ok", "receipt": str(receipt_or_txn)}, 200
-        else:
-            return {"txn": receipt_or_txn}, 200
+        # ✅ Safely format the return format for JS Frontend
+        tx_id = receipt_or_txn.hex() if hasattr(receipt_or_txn, 'hex') else str(receipt_or_txn)
+
+        return {"status": "ok", "receipt": tx_id}, 200
 
     except Exception as e:
         db.session.rollback()
         return {"error": f"Server error: {str(e)}"}, 500
-
 
 
 

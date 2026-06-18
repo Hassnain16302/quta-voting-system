@@ -166,21 +166,16 @@ def send_signed_transaction(w3, raw_txn):
     try:
         signed = w3.eth.account.sign_transaction(raw_txn, private_key=admin_private_key)
 
-        # --- Debugging (Can be removed later) ---
-        print("Signed Transaction Object:", signed)
-        print("Attributes:", dir(signed))
-        # --- End Debugging ---
-
-        # ✅ FIXED: Use the correct attribute 'raw_transaction' (lowercase with underscore)
         if hasattr(signed, 'raw_transaction'):
-            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction) # Changed here
-            print(f"Transaction sent, hash: {tx_hash.hex()}")
-            receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-            print("Transaction receipt received.")
-            return receipt
+            # 🚀 Send to mempool and get the hash
+            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction) 
+            print(f"Transaction sent to mempool, hash: {tx_hash.hex()}")
+            
+            # ✅ THE FIX: Return immediately! 
+            # Do NOT wait for the receipt here. Let the blockchain mine it in the background.
+            return tx_hash
         else:
-            # Fallback message, though the debug output confirmed 'raw_transaction' exists
-            raise AttributeError("The signed transaction object does not have 'raw_transaction'. Available: " + str(dir(signed)))
+            raise AttributeError("The signed transaction object does not have 'raw_transaction'.")
 
     except ValueError as ve:
         print(f"Error during signing or sending: {ve}")
@@ -188,7 +183,6 @@ def send_signed_transaction(w3, raw_txn):
     except Exception as e:
         print(f"An unexpected error occurred in send_signed_transaction: {e}")
         raise e
-
 
 def cast_vote_as_admin(contract, w3, election_id, voter_id, candidate_ids):
     """
