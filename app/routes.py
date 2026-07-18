@@ -1396,6 +1396,31 @@ def archived_statistics(election_id):
         designation_stats=designation_stats
     )
 
+def parse_excel_number(value):
+    """
+    Converts Excel's scientific notation strings (e.g., '4.25E+12') or 
+    accidental floats (e.g., '3050000000.0') back into pure digit strings.
+    """
+    if not value:
+        return ""
+    
+    # Clean up whitespace
+    value_str = str(value).strip()
+    
+    try:
+        # Check if it contains scientific notation 'E' or an accidental float point '.'
+        if 'E' in value_str.upper() or '.' in value_str:
+            float_val = float(value_str)
+            # If it's a whole number, cast to int first to remove the trailing '.0'
+            if float_val.is_integer():
+                return str(int(float_val))
+            return str(float_val)
+    except ValueError:
+        # If float conversion fails (it's normal text like a name), return it as-is
+        return value_str
+        
+    return value_str
+
 
 @bp.route("/admin/upload_csv", methods=["GET", "POST"])
 @login_required
@@ -1417,8 +1442,10 @@ def upload_csv():
             try:
                 full_name = row['name'].strip()
                 email = row['email'].strip()
-                phone = row['phone'].strip()
-                cnic = row['cnic'].strip()
+                
+                # --- NEW: Apply the helper function to clean Excel formatting ---
+                phone = parse_excel_number(row['phone'])
+                cnic = parse_excel_number(row['cnic'])
 
                 # --- Validation ---
                 if not all([full_name, email, phone, cnic]):
