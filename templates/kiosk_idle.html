@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Voting Terminal{% endblock %}
+{% block content %}
+<div class="min-h-[70vh] flex flex-col items-center justify-center text-center relative z-10">
+    <div class="w-24 h-24 bg-white/[0.05] border border-white/10 rounded-3xl flex items-center justify-center mb-8 shadow-2xl relative">
+        <div class="absolute inset-0 bg-blue-500/20 rounded-3xl animate-ping"></div>
+        <i class="bi bi-shield-lock text-4xl text-blue-400 relative z-10"></i>
+    </div>
+    
+    <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4 tracking-tight">Terminal Locked</h1>
+    <p class="text-lg text-slate-500 max-w-md mx-auto">
+        Please approach the Election Officer to verify your identity and unlock this terminal.
+    </p>
+</div>
+
+<!-- Background Polling Script -->
+<script>
+    setInterval(async () => {
+        try {
+            const res = await fetch("{{ url_for('routes.kiosk_status') }}");
+            const data = await res.json();
+            if (data.status === 'active') {
+                window.location.href = "{{ url_for('routes.kiosk_otp') }}";
+            }
+        } catch (e) { console.error("Polling error", e); }
+    }, 2000);
+</script>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Verify Identity{% endblock %}
+{% block content %}
+<div class="flex flex-col items-center justify-center min-h-[70vh]">
+    <div class="bg-white dark:bg-white/[0.02] border border-gray-200 dark:border-white/10 rounded-2xl p-8 backdrop-blur-xl shadow-2xl max-w-md w-full text-center relative overflow-hidden">
+        <div class="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
+
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Verify Identity</h2>
+        <p class="text-slate-500 text-sm mb-6">Confirm your details and enter the 6-digit OTP sent to your email.</p>
+        
+        <!-- Voter Details Card -->
+        <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded-xl p-4 mb-8 text-left flex items-center gap-4 shadow-sm">
+            <div class="w-12 h-12 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center font-bold text-xl border border-blue-500/20">
+                {{ voter.full_name[0] }}
+            </div>
+            <div>
+                <h3 class="font-bold text-gray-900 dark:text-white text-lg leading-tight">{{ voter.full_name }}</h3>
+                <p class="text-xs text-slate-500 mt-0.5">{{ voter.designation }} | CNIC: {{ voter.cnic }}</p>
+            </div>
+        </div>
+        
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            <!-- OTP Input -->
+            <div class="mb-6">
+                {{ form.otp(class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-xl px-4 py-4 text-gray-900 dark:text-white text-center text-3xl font-mono tracking-[0.5em] focus:border-blue-500 focus:ring-2 focus:ring-blue-500 outline-none transition-all", placeholder="000000") }}
+                {% for error in form.otp.errors %}
+                    <p class="text-red-500 text-xs mt-2 font-semibold">{{ error }}</p>
+                {% endfor %}
+            </div>
+            
+            <button type="submit" class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-500/30 hover:scale-[1.02]">
+                <i class="bi bi-fingerprint mr-1"></i> Authenticate & Vote
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

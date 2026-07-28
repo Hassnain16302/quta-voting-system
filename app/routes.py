@@ -374,8 +374,9 @@ def vote():
     form = DynamicVoteForm()
     abi, _ = compile_contract()
     abi_json = abi
+    is_kiosk = session.get("is_kiosk", False)
 
-    return render_template("vote.html", form=form, election=election, now=now, abi_json=abi_json)
+    return render_template("vote.html", form=form, election=election, now=now, abi_json=abi_json, is_kiosk=is_kiosk)
 
 
 # -----------------------------------------
@@ -1072,6 +1073,9 @@ def api_record_vote():
         for db_cid in db_candidate_ids_voted_for:
             new_vote = Vote(voter_id=current_user.id, candidate_id=db_cid, election_id=election.id)
             db.session.add(new_vote)
+        
+        if election.active_offline_voter_id == current_user.id:
+            election.active_offline_voter_id = None
 
         db.session.commit()
 
@@ -1799,3 +1803,104 @@ def generate_otp():
     else:
         flash("System error: Failed to send OTP email. Please try again later.", "danger")
         return redirect(url_for("routes.dashboard"))
+    
+    
+
+from app.utils.email_otp import send_otp_email
+
+# ==========================================
+# HYBRID OFFLINE KIOSK ROUTES
+# ==========================================
+
+@bp.route("/admin/offline_voters", methods=["GET", "POST"])
+@login_required
+def admin_offline_voters():
+    if not session.get("is_admin"): abort(403)
+    
+    election = Election.query.order_by(Election.id.desc()).first()
+    if not election or not election.is_active:
+        flash("No active election to authorize voters for.", "warning")
+        return redirect(url_for('routes.admin_panel'))
+        
+    if request.method == "POST":
+        voter_id = request.form.get("voter_id")
+        voter = User.query.get(voter_id)
+        if voter:
+            # 1. Set active voter in DB so the kiosk wakes up
+            election.active_offline_voter_id = voter.id
+            
+            # 2. Generate and Send OTP to their email
+            otp_code = voter.generate_otp(otp_expiration_seconds=300)
+            send_otp_email(voter.email, otp_code)
+            
+            db.session.commit()
+            flash(f"✅ Authorized {voter.full_name}. OTP sent. The voting terminal is now unlocked for them.", "success")
+        return redirect(url_for("routes.admin_offline_voters"))
+
+    # Fetch offline voters who haven't voted yet
+    voted_ids = [v.voter_id for v in Vote.query.filter_by(election_id=election.id).all()]
+    offline_voters = User.query.filter(
+        User.is_eligible_voter == True, 
+        User.is_online_voter == False,
+        User.email != "admin@university.com",
+        ~User.id.in_(voted_ids)
+    ).all()
+    
+    return render_template("admin_offline_voters.html", voters=offline_voters, election=election)
+
+
+@bp.route("/admin/kiosk_reset", methods=["POST"])
+@login_required
+def kiosk_reset():
+    """Allows admin to cancel the kiosk session if a voter walks away."""
+    if not session.get("is_admin"): abort(403)
+    election = Election.query.order_by(Election.id.desc()).first()
+    if election:
+        election.active_offline_voter_id = None
+        db.session.commit()
+        flash("Kiosk has been manually reset to idle.", "info")
+    return redirect(url_for("routes.admin_offline_voters"))
+
+
+@bp.route("/kiosk")
+def kiosk_idle():
+    """The waiting screen displayed on the physical voting PC."""
+    if current_user.is_authenticated:
+        logout_user() # Force logout so the next voter can't see previous data
+        
+    election = Election.query.order_by(Election.id.desc()).first()
+    return render_template("kiosk_idle.html", election=election)
+
+
+@bp.route("/api/kiosk_status")
+def kiosk_status():
+    """Hidden API that the kiosk pings every 2 seconds."""
+    election = Election.query.order_by(Election.id.desc()).first()
+    if election and election.active_offline_voter_id:
+        return {"status": "active"}
+    return {"status": "idle"}
+
+
+@bp.route("/kiosk/otp", methods=["GET", "POST"])
+def kiosk_otp():
+    """The OTP screen shown only when the admin clicks 'Authorize'."""
+    election = Election.query.order_by(Election.id.desc()).first()
+    if not election or not election.active_offline_voter_id:
+        return redirect(url_for("routes.kiosk_idle"))
+        
+    voter = User.query.get(election.active_offline_voter_id)
+    if not voter:
+        return redirect(url_for("routes.kiosk_idle"))
+        
+    form = OTPForm()
+    if form.validate_on_submit():
+        if voter.verify_otp(form.otp.data):
+            # Log the offline voter in and tag their session
+            login_user(voter)
+            session["is_admin"] = False
+            session["is_kiosk"] = True 
+            return redirect(url_for("routes.vote")) 
+        else:
+            flash("Incorrect verification code. Please try again.", "danger")
+            
+    return render_template("kiosk_otp.html", form=form, voter=voter)

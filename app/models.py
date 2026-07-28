@@ -143,6 +143,7 @@ class Election(db.Model):
     is_closed = db.Column(db.Boolean, default=False)
     total_voters = db.Column(db.Integer, default=0)
     votes_cast = db.Column(db.Integer, default=0)
+    active_offline_voter_id = db.Column(db.Integer, nullable=True)
     
 
     def check_active(self):

@@ -127,10 +127,12 @@
                 const result = await res.json();
 
                 if (res.ok) {
-                    // ✅ SUCCESS: Redirect immediately to Dashboard
-                    // You can optionally un-comment the alert below if you want a popup first.
-                    // alert("Vote submitted successfully!"); 
-                    window.location.href = "{{ url_for('routes.dashboard') }}";
+                    // ✅ SUCCESS: Dynamic redirect based on voting mode (Kiosk vs Online)
+                    {% if is_kiosk %}
+                        window.location.href = "{{ url_for('routes.kiosk_idle') }}";
+                    {% else %}
+                        window.location.href = "{{ url_for('routes.dashboard') }}";
+                    {% endif %}
                 } else {
                     alert("❌ Error: " + (result.error || "Submission failed"));
                     submitBtn.disabled = false;
