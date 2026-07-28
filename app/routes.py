@@ -375,6 +375,18 @@ def vote():
     abi, _ = compile_contract()
     abi_json = abi
     is_kiosk = session.get("is_kiosk", False)
+    
+    if has_voted:
+        if is_kiosk:
+            # ✅ FIX: Clear the tracker to prevent an infinite OTP loop, then lock terminal
+            election.active_offline_voter_id = None
+            db.session.commit()
+            logout_user()
+            flash("This voter has already cast their ballot.", "warning")
+            return redirect(url_for("routes.kiosk_idle"))
+        else:
+            flash("You have already voted.", "info")
+            return redirect(url_for("routes.dashboard"))
 
     return render_template("vote.html", form=form, election=election, now=now, abi_json=abi_json, is_kiosk=is_kiosk)
 
@@ -1106,8 +1118,6 @@ def api_record_vote():
             new_vote = Vote(voter_id=current_user.id, candidate_id=db_cid, election_id=election.id)
             db.session.add(new_vote)
         
-        if election.active_offline_voter_id == current_user.id:
-            election.active_offline_voter_id = None
 
         db.session.commit()
 
@@ -1858,41 +1868,35 @@ def admin_offline_voters():
         voter_id = request.form.get("voter_id")
         voter = User.query.get(voter_id)
         if voter:
-            # 1. Set active voter in DB so the kiosk wakes up
             election.active_offline_voter_id = voter.id
-            
-            # 2. Generate and Send OTP to their email
             otp_code = voter.generate_otp(otp_expiration_seconds=300)
             send_otp_email(voter.email, otp_code)
-            
             db.session.commit()
-            flash(f"✅ Authorized {voter.full_name}. OTP sent. The voting terminal is now unlocked for them.", "success")
+            flash(f"✅ Authorized {voter.full_name}. OTP sent. The voting terminal is now unlocked.", "success")
         return redirect(url_for("routes.admin_offline_voters"))
 
-    # Fetch offline voters who haven't voted yet
-    voted_ids = [v.voter_id for v in Vote.query.filter_by(election_id=election.id).all()]
+    # ✅ FIX: Fetch ALL offline voters so admin can re-authorize if an error occurs
     offline_voters = User.query.filter(
         User.is_eligible_voter == True, 
         User.is_online_voter == False,
-        User.email != "admin@university.com",
-        ~User.id.in_(voted_ids)
-    ).all()
+        User.email != "admin@university.com"
+    ).order_by(User.full_name).all()
     
-    return render_template("admin_offline_voters.html", voters=offline_voters, election=election)
-
+    # ✅ Pass voted_ids to the template to show their current status
+    voted_ids = [v.voter_id for v in Vote.query.filter_by(election_id=election.id).all()]
+    
+    return render_template("admin_offline_voters.html", voters=offline_voters, election=election, voted_ids=voted_ids)
 
 @bp.route("/admin/kiosk_reset", methods=["POST"])
 @login_required
 def kiosk_reset():
-    """Allows admin to cancel the kiosk session if a voter walks away."""
     if not session.get("is_admin"): abort(403)
     election = Election.query.order_by(Election.id.desc()).first()
     if election:
         election.active_offline_voter_id = None
         db.session.commit()
-        flash("Kiosk has been manually reset to idle.", "info")
+        flash("✅ Terminal has been refreshed and locked for the next voter.", "info")
     return redirect(url_for("routes.admin_offline_voters"))
-
 
 @bp.route("/kiosk")
 def kiosk_idle():

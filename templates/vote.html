@@ -14,6 +14,28 @@
     </header>
 
     {% if election and election.start_time <= now <= election.end_time %}
+    <!-- ✅ NEW: Hidden Success Screen -->
+    <div id="success-screen" class="hidden glass-panel p-10 text-center max-w-2xl mx-auto mt-10">
+        <div class="w-20 h-20 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl shadow-[0_0_30px_rgba(34,197,94,0.2)]">
+            <i class="bi bi-check-circle-fill"></i>
+        </div>
+        <h3 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">Vote Cast Successfully!</h3>
+        <p class="text-slate-500 text-lg mb-8">Your ballot has been securely recorded on the blockchain.</p>
+        
+        {% if is_kiosk %}
+            <div class="inline-flex items-center gap-3 px-6 py-4 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/20">
+                <span class="relative flex h-3 w-3">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                </span>
+                Please wait for the Election Officer to refresh the terminal...
+            </div>
+        {% else %}
+            <a href="{{ url_for('routes.dashboard') }}" class="inline-block px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-500/30 hover:-translate-y-0.5">
+                Return to Dashboard
+            </a>
+        {% endif %}
+    </div>
     <form id="vote-form" class="space-y-12">
         {{ form.hidden_tag() }}
 
@@ -75,7 +97,6 @@
             const submitBtn = document.getElementById("submitVote");
             const originalBtnText = submitBtn.innerHTML;
             
-            // 1. Collect Data from Radio Buttons
             const formData = new FormData(this);
             const votesMap = {};
             let hasSelection = false;
@@ -86,7 +107,6 @@
                 if (key.startsWith("vote_for_")) {
                     const designation = key.replace("vote_for_", "").replace(/_/g, " ");
                     const cid = parseInt(value);
-                    
                     if (!isNaN(cid)) {
                         selectedCount++;
                         if (cid > 0) {
@@ -97,19 +117,15 @@
                 }
             }
 
-            // 2. Validation
             if (selectedCount < totalDesignations) {
                 alert("⚠️ Please select an option (Candidate or Abstain) for every designation.");
                 return;
             }
 
             if (!hasSelection && selectedCount > 0) {
-                if(!confirm("⚠️ You have selected 'Abstain' for all positions. Are you sure you want to submit a blank ballot?")) {
-                    return;
-                }
+                if(!confirm("⚠️ You have selected 'Abstain' for all positions. Are you sure you want to submit a blank ballot?")) return;
             }
 
-            // 3. Submit to Backend
             try {
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<span class="animate-spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full mr-2"></span> Processing...';
@@ -127,12 +143,26 @@
                 const result = await res.json();
 
                 if (res.ok) {
-                    // ✅ SUCCESS: Dynamic redirect based on voting mode (Kiosk vs Online)
+                    // ✅ FIX: Hide the voting form and the header, show the success screen
+                    document.getElementById("vote-form").classList.add("hidden");
+                    document.querySelector("header").classList.add("hidden");
+                    document.getElementById("success-screen").classList.remove("hidden");
+                    window.scrollTo(0, 0);
+
                     {% if is_kiosk %}
-                        window.location.href = "{{ url_for('routes.kiosk_idle') }}";
-                    {% else %}
-                        window.location.href = "{{ url_for('routes.dashboard') }}";
+                        // ✅ FIX: For the Kiosk, poll the server to see when Admin hits "Refresh"
+                        setInterval(async () => {
+                            try {
+                                const statusRes = await fetch("{{ url_for('routes.kiosk_status') }}");
+                                const statusData = await statusRes.json();
+                                if (statusData.status === 'idle') {
+                                    // Admin hit refresh! Log out and lock the terminal.
+                                    window.location.href = "{{ url_for('routes.kiosk_idle') }}";
+                                }
+                            } catch (e) { console.error(e); }
+                        }, 2000);
                     {% endif %}
+
                 } else {
                     alert("❌ Error: " + (result.error || "Submission failed"));
                     submitBtn.disabled = false;
