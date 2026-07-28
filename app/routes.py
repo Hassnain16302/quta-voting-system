@@ -662,24 +662,26 @@ from app.blockchain import deploy_contract, load_contract_instance
 from web3 import Web3
 import os
 
+import time # ✅ Add this import at the top of the file if not already there
+
 @bp.route("/admin/assign_election", methods=["GET", "POST"])
 @login_required
 def assign_election():
     if not session.get("is_admin"):
         return redirect(url_for("routes.login"))
-
+    
     form = AssignElectionForm()
-
     if form.validate_on_submit():
         new_election = None
         try:
-            # Step 1: Deploy contract (We STILL wait for this receipt because we need the address)
+            # Step 1: Deploy contract
             contract_address, abi = deploy_contract()
-
+            
             from pytz import timezone, utc
             pkt = timezone("Asia/Karachi")
             start_pkt = pkt.localize(form.start_datetime.data)
             end_pkt = pkt.localize(form.end_datetime.data)
+            
             new_election = Election(
                 title=form.title.data,
                 start_time=start_pkt.astimezone(utc),
@@ -689,7 +691,7 @@ def assign_election():
             )
             db.session.add(new_election)
             db.session.commit()
-
+            
             # Step 3: Connect to blockchain
             rpc_url = os.getenv("WEB3_PROVIDER_URI", "https://ethereum-sepolia-rpc.publicnode.com")
             w3 = Web3(Web3.HTTPProvider(rpc_url))
@@ -698,7 +700,6 @@ def assign_election():
             admin_env = os.getenv("ADMIN_ACCOUNT")
             admin_addr = Web3.to_checksum_address(admin_env) if admin_env else Web3.to_checksum_address(w3.eth.accounts[0])
             admin_private_key = os.getenv("ADMIN_PRIVATE_KEY")
-
             if not admin_private_key:
                 raise Exception("ADMIN_PRIVATE_KEY is not set.")
 
@@ -707,22 +708,43 @@ def assign_election():
             patch_candidates_to_latest_election(new_election.id)
             candidates_to_register = Candidate.query.filter_by(election_id=new_election.id).order_by(Candidate.id.asc()).all()
             
+            # 🚀 FIX: Give the public RPC cluster 3 seconds to sync the deployment block
+            time.sleep(3) 
+            
             current_nonce = w3.eth.get_transaction_count(admin_addr, 'pending')
+            
+            # 🚀 FIX: Apply a 15% gas price boost to ensure rapid processing
+            base_gas_price = w3.eth.gas_price
+            competitive_gas = int(base_gas_price * 1.15) 
             
             for index, candidate in enumerate(candidates_to_register):
                 placeholder_address = "0x0000000000000000000000000000000000000000"
-                txn = contract.functions.addCandidate(new_election.id, placeholder_address).build_transaction({
-                    'chainId': w3.eth.chain_id, 'gas': 200000, 'gasPrice': w3.eth.gas_price,
-                    'from': admin_addr, 'nonce': current_nonce
-                })
                 
-                # THE FIX: Sign and send instantly to mempool. DO NOT wait for receipt!
-                signed_txn = w3.eth.account.sign_transaction(txn, private_key=admin_private_key)
-                w3.eth.send_raw_transaction(signed_txn.raw_transaction)
-                
-                candidate.contract_cid = index
-                current_nonce += 1 
-            
+                # 🚀 FIX: Auto-healing retry loop for stale nonces
+                while True:
+                    try:
+                        txn = contract.functions.addCandidate(new_election.id, placeholder_address).build_transaction({
+                            'chainId': w3.eth.chain_id, 
+                            'gas': 200000, 
+                            'gasPrice': competitive_gas,
+                            'from': admin_addr, 
+                            'nonce': current_nonce
+                        })
+                        signed_txn = w3.eth.account.sign_transaction(txn, private_key=admin_private_key)
+                        w3.eth.send_raw_transaction(signed_txn.raw_transaction)
+                        
+                        candidate.contract_cid = index
+                        current_nonce += 1
+                        break # Success! Break out of the retry loop.
+                        
+                    except Exception as e:
+                        err_msg = str(e).lower()
+                        # If the server is lagging, catch the error, bump the nonce, and retry instantly
+                        if 'nonce too low' in err_msg or 'underpriced' in err_msg or 'already known' in err_msg:
+                            current_nonce += 1
+                        else:
+                            raise e # If it's a real error, crash and report it
+                            
             db.session.flush()
 
             # --- REGISTER VOTERS ---
@@ -730,35 +752,45 @@ def assign_election():
                 User.is_eligible_voter == True,
                 User.email != "admin@university.com"
             ).all()
-
+            
             for voter in eligible_voters:
-                txn_voter = contract.functions.addVoterById(new_election.id, voter.id).build_transaction({
-                    'chainId': w3.eth.chain_id, 'gas': 100000, 'gasPrice': w3.eth.gas_price,
-                    'from': admin_addr, 'nonce': current_nonce
-                })
-                
-                # THE FIX: Sign and send instantly
-                signed_txn = w3.eth.account.sign_transaction(txn_voter, private_key=admin_private_key)
-                w3.eth.send_raw_transaction(signed_txn.raw_transaction)
-                
-                current_nonce += 1 
-                
+                while True:
+                    try:
+                        txn_voter = contract.functions.addVoterById(new_election.id, voter.id).build_transaction({
+                            'chainId': w3.eth.chain_id, 
+                            'gas': 150000, 
+                            'gasPrice': competitive_gas,
+                            'from': admin_addr, 
+                            'nonce': current_nonce
+                        })
+                        signed_txn = w3.eth.account.sign_transaction(txn_voter, private_key=admin_private_key)
+                        w3.eth.send_raw_transaction(signed_txn.raw_transaction)
+                        
+                        current_nonce += 1
+                        break # Success!
+                        
+                    except Exception as e:
+                        err_msg = str(e).lower()
+                        if 'nonce too low' in err_msg or 'underpriced' in err_msg or 'already known' in err_msg:
+                            current_nonce += 1
+                        else:
+                            raise e
+                            
             db.session.commit()
-
             current_app.config["CONTRACT_ADDRESS"] = contract_address
             flash(f"✅ Election scheduled! Transactions sent to blockchain. {len(candidates_to_register)} candidates and {len(eligible_voters)} voters are being registered in the background.", "success")
             return redirect(url_for("routes.admin_panel"))
-
+            
         except Exception as e:
             db.session.rollback()
-            if new_election:
-                 election_to_delete = db.session.get(Election, new_election.id)
-                 if election_to_delete:
-                     db.session.delete(election_to_delete)
-                     db.session.commit()
+            if new_election: 
+                election_to_delete = db.session.get(Election, new_election.id)
+                if election_to_delete:
+                    db.session.delete(election_to_delete)
+                    db.session.commit()
             flash(f"❌ Blockchain error: {str(e)}", "danger")
             return redirect(url_for("routes.assign_election"))
-
+            
     return render_template("assign_election.html", form=form)
 
 
