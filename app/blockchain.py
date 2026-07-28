@@ -85,6 +85,7 @@ def deploy_contract():
         
         current_app.logger.info(f"Contract deployed at {tx_receipt.contractAddress}")
         return tx_receipt.contractAddress, abi
+    
         
     except Exception as e:
         current_app.logger.error(f"Deployment failed: {str(e)}")
@@ -134,11 +135,6 @@ def cast_vote(contract, w3, candidate_id, voter_address):
 
 
 
-
-# In voting_system/app/blockchain.py
-
-# Replace the old get_all_votes function with this one
-# In voting_system/app/blockchain.py
 
 def get_all_votes(contract, w3, election_id, candidates_list): # Pass Candidate objects
     """

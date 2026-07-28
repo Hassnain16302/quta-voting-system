@@ -173,3 +173,11 @@ class AssignDesignationForm(FlaskForm):
         validators=[DataRequired()],
     )
     submit_assign = SubmitField("Assign Selected Users")
+    
+class AssignVotingModeForm(FlaskForm):
+    voting_mode = SelectField(
+        "Select Voting Mode",
+        choices=[("0", "Offline"), ("1", "Online")],
+        validators=[DataRequired()],
+    )
+    submit_mode = SubmitField("Update Mode")

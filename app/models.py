@@ -28,6 +28,7 @@ class User(db.Model, UserMixin):
     # ✅ Add below:
     credentials_password = db.Column(db.String(128), nullable=True)
     credentials_sent = db.Column(db.Boolean, default=False)
+    is_online_voter = db.Column(db.Boolean, default=False)
 
 
     is_candidate = db.Column(db.Boolean, default=False)

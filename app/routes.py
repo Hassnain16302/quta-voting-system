@@ -18,7 +18,7 @@ from flask import (
     abort,
     current_app,
 )
-from app.forms import  SendCredentialsForm, VoteForm, AnnouncementForm, AssignDesignationForm
+from app.forms import  AssignVotingModeForm, SendCredentialsForm, VoteForm, AnnouncementForm, AssignDesignationForm
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
 import os
@@ -554,12 +554,12 @@ def add_voter():
 
     # 1. Initialize Forms
     assign_form = AssignDesignationForm()
+    mode_form = AssignVotingModeForm()  # ✅ Initialize new form
     form = AddVoterForm()
 
     users = User.query.filter(User.is_eligible_voter == False, User.email != "admin@university.com").all()
     form.user_id.choices = [(u.id, f"{u.full_name} ({u.email})") for u in users]
 
-    # --- NEW STRICT CHECK: Block modification if election is active ---
     latest_election = Election.query.order_by(Election.id.desc()).first()
     if latest_election:
         now = datetime.utcnow()
@@ -577,12 +577,7 @@ def add_voter():
             if not user_ids_to_assign:
                 flash("You must select at least one user to assign.", "warning")
                 return redirect(url_for("routes.add_voter"))
-
-            latest_election = Election.query.order_by(Election.id.desc()).first()
             
-            # Allow assigning roles even if no election is active (optional, based on your logic)
-            # if not latest_election: ...
-
             count = 0
             for user_id in user_ids_to_assign:
                 user = User.query.get(user_id)
@@ -590,43 +585,49 @@ def add_voter():
                     user.designation = designation
                     user.is_candidate = True
                     
-                    # Link to election if one exists
                     if latest_election:
-                        candidate = Candidate.query.filter_by(
-                            user_id=user.id, 
-                            election_id=latest_election.id
-                        ).first()
-                        
+                        candidate = Candidate.query.filter_by(user_id=user.id, election_id=latest_election.id).first()
                         if candidate:
                             candidate.designation = designation
                         else:
-                            new_candidate = Candidate(
-                                user_id=user.id,
-                                designation=designation,
-                                election_id=latest_election.id
-                            )
+                            new_candidate = Candidate(user_id=user.id, designation=designation, election_id=latest_election.id)
                             db.session.add(new_candidate)
-                    
                     count += 1
-            
             db.session.commit()
             flash(f"Successfully assigned '{designation}' to {count} user(s).", "success")
             return redirect(url_for("routes.add_voter"))
 
-    # 3. Handle 'Add Voter' Form (Single User Enable)
-    # We check 'submit' name specifically to distinguish from the other form
+    # ✅ 3. NEW: Handle 'Assign Voting Mode' Form (Online/Offline)
+    if 'submit_mode' in request.form:
+        if mode_form.validate_on_submit():
+            mode_val = mode_form.voting_mode.data == "1" # True if '1' (Online), False if '0' (Offline)
+            user_ids_to_assign = request.form.getlist("user_ids")
+            
+            if not user_ids_to_assign:
+                flash("You must select at least one user to update.", "warning")
+                return redirect(url_for("routes.add_voter"))
+            
+            count = 0
+            for user_id in user_ids_to_assign:
+                user = User.query.get(user_id)
+                if user and user.email != "admin@university.com":
+                    user.is_online_voter = mode_val
+                    count += 1
+            db.session.commit()
+            mode_text = "Online" if mode_val else "Offline"
+            flash(f"Successfully updated voting mode to '{mode_text}' for {count} user(s).", "success")
+            return redirect(url_for("routes.add_voter"))
+
+    # 4. Handle 'Add Voter' Form (Single User Enable)
     if 'submit' in request.form and form.validate_on_submit():
         user = User.query.get(form.user_id.data)
         if user:
             user.is_eligible_voter = True
-            # Optional: Generate password if needed
-            # new_password = os.urandom(6).hex()
-            # user.set_password(new_password)
             db.session.commit()
             flash(f"{user.full_name} marked as eligible voter.", "success")
         return redirect(url_for("routes.add_voter"))
-    
-    # 4. Render Page (GET Request)
+
+    # 5. Render Page (GET Request)
     eligible_voters = User.query.filter(
         User.is_eligible_voter == True
     ).order_by(User.full_name).all()
@@ -639,9 +640,9 @@ def add_voter():
         form=form, 
         voters=eligible_voters, 
         csrf_token=csrf_token,
-        assign_form=assign_form
+        assign_form=assign_form,
+        mode_form=mode_form  # ✅ Pass the new form to the template
     )
-
 # 5.4 ASSIGN ELECTION DATE & TIME (DEPLOY CONTRACT)
 # In voting_system/app/routes.py
 
