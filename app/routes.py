@@ -1870,23 +1870,30 @@ def admin_offline_voters():
         if voter:
             election.active_offline_voter_id = voter.id
             otp_code = voter.generate_otp(otp_expiration_seconds=300)
+            from app.utils.email_otp import send_otp_email
             send_otp_email(voter.email, otp_code)
             db.session.commit()
             flash(f"✅ Authorized {voter.full_name}. OTP sent. The voting terminal is now unlocked.", "success")
         return redirect(url_for("routes.admin_offline_voters"))
 
-    # ✅ FIX: Fetch ALL offline voters so admin can re-authorize if an error occurs
     offline_voters = User.query.filter(
         User.is_eligible_voter == True, 
         User.is_online_voter == False,
         User.email != "admin@university.com"
     ).order_by(User.full_name).all()
     
-    # ✅ Pass voted_ids to the template to show their current status
     voted_ids = [v.voter_id for v in Vote.query.filter_by(election_id=election.id).all()]
     
-    return render_template("admin_offline_voters.html", voters=offline_voters, election=election, voted_ids=voted_ids)
-
+    # ✅ FIX: Import and generate the CSRF token, then pass it to the template
+    from flask_wtf.csrf import generate_csrf
+    
+    return render_template(
+        "admin_offline_voters.html", 
+        voters=offline_voters, 
+        election=election, 
+        voted_ids=voted_ids,
+        csrf_token=generate_csrf()  # <-- ADDED THIS
+    )
 @bp.route("/admin/kiosk_reset", methods=["POST"])
 @login_required
 def kiosk_reset():
