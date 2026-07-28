@@ -35,4 +35,50 @@
         </form>
     </div>
 </div>
+
+<!-- ✅ NEW: Smart Polling Script to detect Admin Refresh -->
+<script>
+    let pollInterval = null;
+
+    async function checkKioskStatus() {
+        if (document.hidden) return; // Save Render hours if tab is hidden
+
+        try {
+            const res = await fetch("{{ url_for('routes.kiosk_status') }}");
+            const data = await res.json();
+            
+            // If admin hits refresh/lock, the status becomes 'idle'. 
+            // Kick the screen back to the locked page.
+            if (data.status === 'idle') {
+                window.location.href = "{{ url_for('routes.kiosk_idle') }}";
+            }
+        } catch (e) { 
+            console.error("Polling error", e); 
+        }
+    }
+
+    function startPolling() {
+        if (!pollInterval) {
+            pollInterval = setInterval(checkKioskStatus, 8000); // Check every 8 seconds
+        }
+    }
+
+    function stopPolling() {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+        }
+    }
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+            stopPolling();
+        } else {
+            checkKioskStatus();
+            startPolling();
+        }
+    });
+
+    startPolling();
+</script>
 {% endblock %}
