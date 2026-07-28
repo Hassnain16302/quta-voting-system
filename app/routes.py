@@ -766,17 +766,26 @@ def assign_election():
 def send_credentials():
     if not session.get("is_admin"):
         return redirect(url_for("routes.login"))
-
-    unsent_users = User.query.filter_by(is_eligible_voter=True, credentials_sent=False)\
-                             .filter(User.email != "admin@university.com").all()
-    sent_users = User.query.filter_by(is_eligible_voter=True, credentials_sent=True)\
-                           .filter(User.email != "admin@university.com").all()
+    
+    # ✅ NEW: Added `is_online_voter=True` to filter out offline voters
+    unsent_users = User.query.filter_by(
+        is_eligible_voter=True, 
+        is_online_voter=True, 
+        credentials_sent=False
+    ).filter(User.email != "admin@university.com").all()
+    
+    # ✅ NEW: Added `is_online_voter=True` here as well
+    sent_users = User.query.filter_by(
+        is_eligible_voter=True, 
+        is_online_voter=True, 
+        credentials_sent=True
+    ).filter(User.email != "admin@university.com").all()
 
     if request.method == "POST":
         action = request.form.get("action")
         selected_ids = request.form.getlist("selected_ids")
         count = 0
-
+        
         if action == "send_all":
             users = unsent_users
         elif action == "resend_all":
@@ -789,27 +798,26 @@ def send_credentials():
             users = [u for u in users if u in sent_users]
         else:
             users = []
-
+            
         for user in users:
             try:
                 user.send_credentials_email()
                 count += 1
             except Exception as e:
                 print(f"Error sending to {user.email}: {e}")
-
+                
         if action.startswith("send"):
             flash(f"✅ Credentials sent to {count} user(s).", "success")
         elif action.startswith("resend"):
             flash(f"🔁 Credentials resent to {count} user(s).", "info")
-
+            
         return redirect(url_for("routes.send_credentials"))
-
+        
     return render_template(
         "send_credentials.html",
         unsent_users=unsent_users,
         sent_users=sent_users
     )
-
 
 
 
